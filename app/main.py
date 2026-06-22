@@ -91,11 +91,25 @@ async def validation_error(request: StarletteRequest, exc: RequestValidationErro
     return HTMLResponse("Datos inválidos", status_code=400)
 
 
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: StarletteRequest, exc: StarletteHTTPException):
+    if exc.status_code in (301, 302, 303, 307, 308):
+        location = exc.headers.get("location")
+        if location:
+            return RedirectResponse(location, status_code=exc.status_code)
+
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept and exc.status_code == 404:
+        return templates.TemplateResponse(
+            "error.html",
+            {"request": request, "message": "Página no encontrada."},
+            status_code=404,
+        )
+    return HTMLResponse(str(exc.detail), status_code=exc.status_code)
+
+
 @app.exception_handler(Exception)
 async def unhandled_error(request: StarletteRequest, exc: Exception):
-    if isinstance(exc, StarletteHTTPException):
-        raise exc
-
     import traceback
 
     traceback.print_exc()
@@ -286,8 +300,14 @@ async def admin_dashboard(request: Request, period: str = "all"):
     if period not in ("all", "today", "week", "month"):
         period = "all"
 
-    analytics = get_admin_analytics(period)
-    pending = list_pending_reports()
+    try:
+        analytics = get_admin_analytics(period)
+        pending = list_pending_reports()
+    except Exception as exc:
+        return RedirectResponse(
+            with_query(U.REPORTES, error=f"No se pudo cargar el dashboard: {exc}"),
+            status_code=303,
+        )
 
     return templates.TemplateResponse(
         "admin_analytics.html",
@@ -309,8 +329,14 @@ async def admin_clients(request: Request):
     if auth_redirect:
         return auth_redirect
 
-    workers = list_workers()
-    pending = list_pending_reports()
+    try:
+        workers = list_workers()
+        pending = list_pending_reports()
+    except Exception as exc:
+        return RedirectResponse(
+            with_query(U.CLIENTES, error=f"No se pudo cargar clientes: {exc}"),
+            status_code=303,
+        )
 
     return templates.TemplateResponse(
         "admin_clients.html",
@@ -331,7 +357,7 @@ async def admin_create_worker(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
-    password_confirm: str = Form(...),
+    password_confirm: str = Form(""),
     name: str = Form(...),
     retiro_fee: str = Form("50"),
 ):
@@ -370,7 +396,7 @@ async def admin_create_admin(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
-    password_confirm: str = Form(...),
+    password_confirm: str = Form(""),
     name: str = Form(...),
 ):
     _, auth_redirect = check_admin_session(request)

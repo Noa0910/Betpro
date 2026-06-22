@@ -139,38 +139,116 @@ def calculate_summary(report: dict) -> dict:
     return summary
 
 
+def _load_report_children(conn, report_ids: list[int]) -> tuple[dict, dict, dict]:
+    if not report_ids:
+        return {}, {}, {}
+
+    placeholders = ",".join("?" * len(report_ids))
+    cargues_map: dict[int, list] = {rid: [] for rid in report_ids}
+    retiros_map: dict[int, list] = {rid: [] for rid in report_ids}
+    discounts_map: dict[int, list] = {rid: [] for rid in report_ids}
+
+    for row in conn.execute(
+        f"SELECT id, report_id, amount FROM cargues WHERE report_id IN ({placeholders}) ORDER BY id",
+        report_ids,
+    ).fetchall():
+        cargues_map[row["report_id"]].append({"id": row["id"], "amount": row["amount"]})
+
+    for row in conn.execute(
+        f"SELECT id, report_id, amount FROM retiros WHERE report_id IN ({placeholders}) ORDER BY id",
+        report_ids,
+    ).fetchall():
+        retiros_map[row["report_id"]].append({"id": row["id"], "amount": row["amount"]})
+
+    for row in conn.execute(
+        f"SELECT id, report_id, description, amount FROM discounts WHERE report_id IN ({placeholders}) ORDER BY id",
+        report_ids,
+    ).fetchall():
+        discounts_map[row["report_id"]].append(
+            {"id": row["id"], "description": row["description"], "amount": row["amount"]}
+        )
+
+    return cargues_map, retiros_map, discounts_map
+
+
+def _build_report_row(row, cargues_map, retiros_map, discounts_map) -> dict:
+    data = dict(row)
+    rid = data["id"]
+    data["cargues"] = cargues_map.get(rid, [])
+    data["retiros"] = retiros_map.get(rid, [])
+    data["discounts"] = discounts_map.get(rid, [])
+    data["summary"] = calculate_summary(data)
+    data["is_locked"] = data["status"] in (REPORT_CONFIRMED, REPORT_SUBMITTED)
+    data["client_can_edit"] = data["status"] == REPORT_DRAFT
+    data["admin_can_edit_entries"] = data["status"] == REPORT_SUBMITTED
+    return data
+
+
+def get_cumulative_totals_batch(user_ids: list[int]) -> dict[int, float]:
+    if not user_ids:
+        return {}
+
+    totals = {uid: 0.0 for uid in user_ids}
+    with db_session() as conn:
+        placeholders = ",".join("?" * len(user_ids))
+        rows = conn.execute(
+            f"""
+            SELECT dr.id, dr.user_id, dr.status, u.retiro_fee
+            FROM daily_reports dr
+            JOIN users u ON u.id = dr.user_id
+            WHERE dr.user_id IN ({placeholders}) AND dr.status = 'confirmed'
+            ORDER BY dr.user_id, dr.report_date
+            """,
+            user_ids,
+        ).fetchall()
+        if not rows:
+            return totals
+
+        report_ids = [row["id"] for row in rows]
+        cargues_map, retiros_map, discounts_map = _load_report_children(conn, report_ids)
+
+    for row in rows:
+        report = _build_report_row(row, cargues_map, retiros_map, discounts_map)
+        totals[row["user_id"]] = round(
+            totals[row["user_id"]] + report["summary"]["daily_total"],
+            2,
+        )
+    return totals
+
+
 def get_user_reports(user_id: int, limit: int = 30) -> list[dict]:
     with db_session() as conn:
         rows = conn.execute(
             """
-            SELECT dr.id, dr.report_date
+            SELECT dr.*, u.name AS user_name, u.retiro_fee
             FROM daily_reports dr
+            JOIN users u ON u.id = dr.user_id
             WHERE dr.user_id = ?
             ORDER BY dr.report_date DESC
             LIMIT ?
             """,
             (user_id, limit),
         ).fetchall()
+        if not rows:
+            return []
 
-        reports = []
-        cumulative = 0.0
-        for row in reversed(rows):
-            details = get_report_details(row["id"])
-            if not details:
-                continue
-            cumulative += details["summary"]["daily_total"]
-            details["cumulative_total"] = round(cumulative, 2)
-            reports.append(details)
+        report_ids = [row["id"] for row in rows]
+        cargues_map, retiros_map, discounts_map = _load_report_children(conn, report_ids)
 
-        reports.reverse()
-        return reports
+    cumulative = 0.0
+    reports = []
+    for row in reversed(rows):
+        details = _build_report_row(row, cargues_map, retiros_map, discounts_map)
+        cumulative += details["summary"]["daily_total"]
+        details["cumulative_total"] = round(cumulative, 2)
+        reports.append(details)
+
+    reports.reverse()
+    return reports
 
 
 def get_cumulative_total(user_id: int) -> float:
-    reports = get_user_reports(user_id, limit=1000)
-    if not reports:
-        return 0.0
-    return reports[0]["cumulative_total"]
+    return get_cumulative_totals_batch([user_id]).get(user_id, 0.0)
 
 
 def save_cargues(report_id: int, amounts: list[float]) -> None:
@@ -369,9 +447,11 @@ def list_workers() -> list[dict]:
             """
         ).fetchall()
         workers = []
+        user_ids = [row["id"] for row in rows]
+        cumulative_map = get_cumulative_totals_batch(user_ids)
         for row in rows:
             worker = dict(row)
-            worker["cumulative_total"] = get_cumulative_total(worker["id"])
+            worker["cumulative_total"] = cumulative_map.get(worker["id"], 0.0)
             worker["pending_reports"] = count_pending_reports(worker["id"])
             workers.append(worker)
         return workers
