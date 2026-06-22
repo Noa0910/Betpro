@@ -27,7 +27,11 @@
   <div class="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300">{{ error }}</div>
   {% endif %}
 
-  {{ ui.cumulative_banner(cumulative, "Total acumulado del cliente") }}
+  {{ ui.cumulative_banner(
+    cumulative,
+    "Suma de días confirmados",
+    report.summary.daily_total if report.summary.is_confirmed else report.summary.preview_total
+  ) }}
 
   <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
     <div>

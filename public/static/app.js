@@ -32,6 +32,65 @@ function createAmountRow(value, options = {}) {
   return row;
 }
 
+function formatMoney(value) {
+  const num = Number(value) || 0;
+  return (
+    "$" +
+    num.toLocaleString("es-MX", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+  );
+}
+
+function recalcDaySummary() {
+  const summary = document.querySelector("[data-day-summary]");
+  if (!summary || summary.dataset.editable !== "true") return;
+
+  const fee = parseFloat(summary.dataset.retiroFee || "0") || 0;
+  const discounts = parseFloat(summary.dataset.discounts || "0") || 0;
+
+  let totalRetiros = 0;
+  let totalCargues = 0;
+  let numRetiros = 0;
+
+  document.querySelectorAll('input[name="retiro_amount"]').forEach((input) => {
+    const val = parseFloat(input.value);
+    if (!isNaN(val) && val > 0) {
+      totalRetiros += val;
+      numRetiros += 1;
+    }
+  });
+
+  document.querySelectorAll('input[name="cargue_amount"]').forEach((input) => {
+    const val = parseFloat(input.value);
+    if (!isNaN(val) && val > 0) totalCargues += val;
+  });
+
+  const totalFees = numRetiros * fee;
+  const dayTotal = totalRetiros - totalCargues - totalFees - discounts;
+
+  const setText = (selector, text) => {
+    const el = summary.querySelector(selector);
+    if (el) el.textContent = text;
+  };
+
+  setText("[data-sum-retiros]", formatMoney(totalRetiros));
+  setText("[data-sum-cargues]", "− " + formatMoney(totalCargues));
+  setText("[data-sum-fees]", "− " + formatMoney(totalFees));
+  setText("[data-sum-discounts]", "− " + formatMoney(discounts));
+  setText("[data-sum-day]", formatMoney(dayTotal));
+
+  const numEl = summary.querySelector("[data-sum-num-retiros]");
+  if (numEl) numEl.textContent = String(numRetiros);
+
+  const discountRow = summary.querySelector("[data-discount-row]");
+  if (discountRow) discountRow.classList.toggle("hidden", discounts <= 0);
+
+  const bannerDay = document.querySelector("[data-sum-day-banner]");
+  if (bannerDay) bannerDay.textContent = formatMoney(dayTotal);
+}
+
 function initAmountList(container, options = {}) {
   const { amountName = "amount", initialItems = [], locked = false } = options;
 
@@ -52,6 +111,7 @@ function initAmountList(container, options = {}) {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       });
+    recalcDaySummary();
   }
 
   function addRow(value = "") {
@@ -122,6 +182,8 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll("[data-discount-widget]").forEach((widget) => {
     initDiscountList(widget);
   });
+
+  recalcDaySummary();
 });
 
 function initPasswordFields() {

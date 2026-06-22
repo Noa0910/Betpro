@@ -54,12 +54,21 @@
 </div>
 {% endmacro %}
 
-{% macro cumulative_banner(total, subtitle="") %}
-<div class="cumulative-banner">
-  <p class="label">Total acumulado</p>
-  <p class="value">{{ total | money }}</p>
-  {% if subtitle %}
-  <p class="sub">{{ subtitle }}</p>
+{% macro cumulative_banner(total, subtitle="", day_total=none) %}
+<div class="cumulative-banner{% if day_total is not none %} cumulative-banner--split{% endif %}">
+  <div>
+    <p class="label">Total acumulado</p>
+    <p class="value">{{ total | money }}</p>
+    {% if subtitle %}
+    <p class="sub">{{ subtitle }}</p>
+    {% endif %}
+  </div>
+  {% if day_total is not none %}
+  <div class="cumulative-banner-day">
+    <p class="label">Total del día</p>
+    <p class="value value-day" data-sum-day-banner>{{ day_total | money }}</p>
+    <p class="sub">Retiros − cargues − tarifas − descuentos</p>
+  </div>
   {% endif %}
 </div>
 {% endmacro %}
@@ -152,34 +161,48 @@
 {% endmacro %}
 
 {% macro summary_boxes(report, retiro_fee) %}
-<div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-  <div class="stat-box">
-    <span class="stat-label">Tarifa por retiro</span>
-    <span class="stat-value">{{ retiro_fee | money }}</span>
+<div class="card day-summary"
+     data-day-summary
+     data-retiro-fee="{{ retiro_fee }}"
+     data-discounts="{{ report.summary.total_discounts }}"
+     data-editable="{{ 'true' if report.client_can_edit else 'false' }}">
+  <h3 class="card-title mb-1">Cálculo del día</h3>
+  <p class="text-sm text-gray-400 mb-4">Retiros del día − cargues − (N° retiros × tarifa) − descuentos</p>
+
+  <div class="day-summary-lines">
+    <div class="day-line day-line-plus">
+      <span>Total retiros del día</span>
+      <strong data-sum-retiros>{{ report.summary.total_retiros | money }}</strong>
+    </div>
+    <div class="day-line day-line-minus">
+      <span>Cargues del día</span>
+      <strong data-sum-cargues>− {{ report.summary.total_cargues | money }}</strong>
+    </div>
+    <div class="day-line day-line-minus">
+      <span>Tarifas (<span data-sum-num-retiros>{{ report.summary.num_retiros }}</span> retiro{% if report.summary.num_retiros != 1 %}s{% endif %} × {{ retiro_fee | money }})</span>
+      <strong data-sum-fees>− {{ report.summary.total_fees | money }}</strong>
+    </div>
+    <div class="day-line day-line-minus{% if report.summary.total_discounts <= 0 %} hidden{% endif %}" data-discount-row>
+      <span>Descuentos</span>
+      <strong data-sum-discounts>− {{ report.summary.total_discounts | money }}</strong>
+    </div>
+    <div class="day-line day-line-total">
+      <span>{% if report.summary.is_confirmed %}Total del día{% else %}Total estimado del día{% endif %}</span>
+      <strong data-sum-day class="day-total-value">
+        {% if report.summary.is_confirmed %}
+          {{ report.summary.daily_total | money }}
+        {% else %}
+          {{ report.summary.preview_total | money }}
+        {% endif %}
+      </strong>
+    </div>
   </div>
-  <div class="stat-box">
-    <span class="stat-label">Retiros × tarifa</span>
-    <span class="stat-value">{{ report.summary.num_retiros }} × {{ retiro_fee | money }} = {{ report.summary.total_fees | money }}</span>
-  </div>
-  <div class="stat-box">
-    <span class="stat-label">Descuentos</span>
-    <span class="stat-value">{{ report.summary.total_discounts | money }}</span>
-  </div>
-  <div class="stat-box stat-box-highlight">
-    <span class="stat-label">
-      {% if report.summary.is_confirmed %}Total del día{% else %}Total estimado{% endif %}
-    </span>
-    <span class="stat-value text-betpro-400 text-2xl">
-      {% if report.summary.is_confirmed %}
-        {{ report.summary.daily_total | money }}
-      {% else %}
-        {{ report.summary.preview_total | money }}
-      {% endif %}
-    </span>
-    {% if not report.summary.is_confirmed %}
-    <span class="text-xs text-gray-400 mt-1 block">Cuenta cuando el admin confirme el reporte</span>
-    {% endif %}
-  </div>
+
+  {% if not report.summary.is_confirmed %}
+  <p class="text-xs text-gray-500 mt-3">El total del día se suma al acumulado cuando el admin confirma el reporte.</p>
+  {% else %}
+  <p class="text-xs text-gray-500 mt-3">Este día ya está incluido en tu total acumulado.</p>
+  {% endif %}
 </div>
 {% endmacro %}
 
@@ -193,7 +216,8 @@
         <th class="pb-3 pr-4">Estado</th>
         <th class="pb-3 pr-4">Cargues</th>
         <th class="pb-3 pr-4">Retiros</th>
-        <th class="pb-3 pr-4">Día</th>
+        <th class="pb-3 pr-4">Tarifas</th>
+        <th class="pb-3 pr-4">Total día</th>
         <th class="pb-3">Acumulado</th>
       </tr>
     </thead>
@@ -204,7 +228,8 @@
         <td class="py-3 pr-4">{{ report_status_badge(h) }}</td>
         <td class="py-3 pr-4">{{ h.summary.total_cargues | money }}</td>
         <td class="py-3 pr-4">{{ h.summary.total_retiros | money }}</td>
-        <td class="py-3 pr-4 {% if h.summary.daily_total >= 0 %}text-betpro-400{% else %}text-red-400{% endif %}">
+        <td class="py-3 pr-4 text-orange-300">− {{ h.summary.total_fees | money }}</td>
+        <td class="py-3 pr-4 {% if h.summary.preview_total >= 0 %}text-betpro-400{% else %}text-red-400{% endif %}">
           {% if h.summary.is_confirmed %}
             {{ h.summary.daily_total | money }}
           {% else %}
@@ -214,7 +239,7 @@
         <td class="py-3 font-semibold">{{ h.cumulative_total | money }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="6" class="py-6 text-center text-gray-500">Sin reportes guardados</td></tr>
+      <tr><td colspan="7" class="py-6 text-center text-gray-500">Sin reportes guardados</td></tr>
       {% endfor %}
     </tbody>
   </table>
