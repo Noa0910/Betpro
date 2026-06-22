@@ -3,10 +3,13 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import FastAPI, Form, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.requests import Request as StarletteRequest
 
 from app import urls as U
 from app.auth import authenticate_user, check_admin_session, check_user_session, login_redirect
@@ -71,6 +74,42 @@ def startup() -> None:
     from app.bootstrap import seed_if_empty
 
     seed_if_empty()
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: StarletteRequest, exc: RequestValidationError):
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept:
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "message": "Revisa que todos los campos del formulario estén completos.",
+            },
+            status_code=400,
+        )
+    return HTMLResponse("Datos inválidos", status_code=400)
+
+
+@app.exception_handler(Exception)
+async def unhandled_error(request: StarletteRequest, exc: Exception):
+    if isinstance(exc, StarletteHTTPException):
+        raise exc
+
+    import traceback
+
+    traceback.print_exc()
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept:
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "message": "Ocurrió un error al procesar la solicitud. Intenta de nuevo.",
+            },
+            status_code=500,
+        )
+    return HTMLResponse("Error interno del servidor", status_code=500)
 
 
 def fmt_money(value: float) -> str:

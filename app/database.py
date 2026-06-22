@@ -42,8 +42,10 @@ class _TursoConnection:
         self._client = client
 
     def execute(self, sql: str, params: tuple | list = ()):
-        args = list(params) if params else None
-        result = self._client.execute(sql, args)
+        if params:
+            result = self._client.execute(sql, list(params))
+        else:
+            result = self._client.execute(sql)
         return _TursoCursor(result)
 
     def executescript(self, sql: str) -> None:

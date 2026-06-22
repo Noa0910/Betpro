@@ -7,6 +7,20 @@ REPORT_DRAFT = "draft"
 REPORT_SUBMITTED = "submitted"
 REPORT_CONFIRMED = "confirmed"
 
+EMPTY_SUMMARY = {
+    "total_cargues": 0.0,
+    "total_retiros": 0.0,
+    "num_retiros": 0,
+    "retiro_fee": 0.0,
+    "total_fees": 0.0,
+    "total_discounts": 0.0,
+    "preview_total": 0.0,
+    "daily_total": 0.0,
+    "status": REPORT_DRAFT,
+    "is_confirmed": False,
+    "is_pending": False,
+}
+
 
 def parse_amount(value: str) -> float:
     cleaned = value.strip().replace(",", ".")
@@ -35,16 +49,18 @@ def get_or_create_report(user_id: int, report_date: str) -> dict:
         if row:
             return dict(row)
 
-        row = conn.execute(
+        cursor = conn.execute(
             """
             INSERT INTO daily_reports (user_id, report_date, status)
             VALUES (?, ?, 'draft')
-            RETURNING id
             """,
             (user_id, report_date),
-        ).fetchone()
+        )
+        new_id = cursor.lastrowid
+        if not new_id:
+            new_id = conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
         return {
-            "id": row["id"],
+            "id": new_id,
             "user_id": user_id,
             "report_date": report_date,
             "status": REPORT_DRAFT,
@@ -323,7 +339,7 @@ def list_pending_reports(limit: int = 20) -> list[dict]:
         for row in rows:
             item = dict(row)
             details = get_report_details(row["id"])
-            item["summary"] = details["summary"] if details else {}
+            item["summary"] = details["summary"] if details else dict(EMPTY_SUMMARY)
             results.append(item)
         return results
 
