@@ -302,6 +302,27 @@ def get_cumulative_total(user_id: int) -> float:
     return get_cumulative_totals_batch([user_id]).get(user_id, 0.0)
 
 
+def _write_report_entries(
+    conn,
+    report_id: int,
+    cargues: list[float],
+    retiros: list[float],
+) -> None:
+    conn.execute("DELETE FROM cargues WHERE report_id = ?", (report_id,))
+    for amount in cargues:
+        conn.execute(
+            "INSERT INTO cargues (report_id, amount) VALUES (?, ?)",
+            (report_id, amount),
+        )
+
+    conn.execute("DELETE FROM retiros WHERE report_id = ?", (report_id,))
+    for amount in retiros:
+        conn.execute(
+            "INSERT INTO retiros (report_id, amount) VALUES (?, ?)",
+            (report_id, amount),
+        )
+
+
 def save_cargues(report_id: int, amounts: list[float]) -> None:
     with db_session() as conn:
         conn.execute("DELETE FROM cargues WHERE report_id = ?", (report_id,))
@@ -347,10 +368,8 @@ def save_client_report(
     if submit and not cargues and not retiros:
         raise ValueError("Agrega al menos un cargue o retiro antes de enviar al admin.")
 
-    save_cargues(report_id, cargues)
-    save_retiros(report_id, retiros)
-
     with db_session() as conn:
+        _write_report_entries(conn, report_id, cargues, retiros)
         if submit:
             conn.execute(
                 """

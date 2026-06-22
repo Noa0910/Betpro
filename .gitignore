@@ -14,4 +14,5 @@ venv/
 
 # Entorno
 .env
+.betpro_session_secret
 .vercel

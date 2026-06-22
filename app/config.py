@@ -26,7 +26,7 @@ IS_VERCEL = os.getenv("VERCEL") == "1"
 
 CANONICAL_HOST = os.getenv("BETPRO_CANONICAL_HOST", "www.betpro.management").strip()
 
-APP_VERSION = "2026.06.22-8"
+APP_VERSION = "2026.06.22-9"
 
 
 def _normalize_turso_url(url: str) -> str:
@@ -69,6 +69,12 @@ def get_session_secret() -> str:
             if source:
                 return hashlib.sha256(f"betpro-session:{source}".encode()).hexdigest()
 
+    secret_file = BASE_DIR / ".betpro_session_secret"
+    if secret_file.exists():
+        return secret_file.read_text(encoding="utf-8").strip()
+
     import secrets
 
-    return secrets.token_hex(32)
+    secret = secrets.token_hex(32)
+    secret_file.write_text(secret, encoding="utf-8")
+    return secret

@@ -49,7 +49,7 @@ def session_user_payload(user: dict) -> dict:
 
 def authenticate_user(username: str, password: str) -> Optional[dict]:
     user = get_user_by_username(username)
-    if not user or not user["active"]:
+    if not user or not int(user.get("active") or 0):
         return None
     if not verify_password(password, user["password_hash"]):
         return None
@@ -65,13 +65,29 @@ def _refresh_session_user(request: Request) -> tuple[Optional[dict], Optional[Re
     if not stored:
         return None, login_redirect()
 
-    fresh = get_user_by_id(int(stored["id"]))
-    if not fresh or not fresh["active"]:
+    try:
+        user_id = int(stored["id"])
+    except (KeyError, TypeError, ValueError):
+        request.session.clear()
+        return None, login_redirect()
+
+    try:
+        fresh = get_user_by_id(user_id)
+    except Exception:
+        # Si la BD falla momentáneamente, mantener la sesión activa.
+        return session_user_payload(stored), None
+
+    if not fresh:
+        request.session.clear()
+        return None, login_redirect()
+
+    if not int(fresh.get("active") or 0):
         request.session.clear()
         return None, login_redirect()
 
     user = session_user_payload(fresh)
-    request.session["user"] = user
+    if stored != user:
+        request.session["user"] = user
     return user, None
 
 

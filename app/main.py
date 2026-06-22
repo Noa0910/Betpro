@@ -62,13 +62,14 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.middleware("http")
 async def redirect_canonical_host(request: Request, call_next):
-    if CANONICAL_HOST and request.method in ("GET", "HEAD"):
+    if CANONICAL_HOST:
         host = request.headers.get("host", "").split(":")[0].lower()
         if host != CANONICAL_HOST and (
             host.endswith(".vercel.app") or host == "betpro.management"
         ):
             target = request.url.replace(scheme="https", netloc=CANONICAL_HOST)
-            return RedirectResponse(str(target), status_code=301)
+            code = 307 if request.method == "POST" else 301
+            return RedirectResponse(str(target), status_code=code)
     return await call_next(request)
 
 
@@ -196,6 +197,64 @@ def report_context(report: dict) -> dict:
     }
 
 
+def build_worker_panel_context(
+    user: dict,
+    report_date: str,
+    *,
+    message: str | None = None,
+    error: str | None = None,
+) -> dict:
+    report_date = parse_report_date(report_date)
+    report = get_or_create_report(user["id"], report_date)
+    details = get_report_details(report["id"])
+    if not details:
+        raise RuntimeError("No se pudo cargar el reporte")
+
+    ctx = report_context(details)
+    return {
+        "request": None,
+        "user": user,
+        "report": details,
+        "report_date": report_date,
+        "history": get_user_reports(user["id"], limit=15),
+        "cumulative": get_cumulative_total(user["id"]),
+        "message": message,
+        "error": error,
+        **ctx,
+    }
+
+
+def render_worker_panel(
+    request: Request,
+    user: dict,
+    report_date: str,
+    *,
+    message: str | None = None,
+    error: str | None = None,
+    status_code: int = 200,
+):
+    try:
+        context = build_worker_panel_context(
+            user,
+            report_date,
+            message=message,
+            error=error,
+        )
+    except RuntimeError as exc:
+        return templates.TemplateResponse(
+            "error.html",
+            {"request": request, "message": str(exc)},
+            status_code=500,
+        )
+
+    context["request"] = request
+    return templates.TemplateResponse(
+        "worker_panel.html",
+        context,
+        status_code=status_code,
+    )
+
+
 def redirect_login() -> RedirectResponse:
     return login_redirect()
 
@@ -264,34 +323,12 @@ async def worker_panel(request: Request, fecha: str | None = None):
         return RedirectResponse(U.REPORTES, status_code=303)
 
     report_date = parse_report_date(fecha)
-    report = get_or_create_report(user["id"], report_date)
-    details = get_report_details(report["id"])
-    if not details:
-        return templates.TemplateResponse(
-            "error.html",
-            {
-                "request": request,
-                "message": "No se pudo cargar el reporte. Recarga la página o contacta al admin.",
-            },
-            status_code=500,
-        )
-    history = get_user_reports(user["id"], limit=15)
-    cumulative = get_cumulative_total(user["id"])
-    ctx = report_context(details)
-
-    return templates.TemplateResponse(
-        "worker_panel.html",
-        {
-            "request": request,
-            "user": user,
-            "report": details,
-            "report_date": report_date,
-            "history": history,
-            "cumulative": cumulative,
-            "message": request.query_params.get("msg"),
-            "error": request.query_params.get("error"),
-            **ctx,
-        },
+    return render_worker_panel(
+        request,
+        user,
+        report_date,
+        message=request.query_params.get("msg"),
+        error=request.query_params.get("error"),
     )
 
 
@@ -319,43 +356,29 @@ async def worker_save_report(
             submit=submit,
         )
     except ValueError as exc:
-        details = get_report_details(report["id"])
-        if not details:
-            return templates.TemplateResponse(
-                "error.html",
-                {
-                    "request": request,
-                    "message": "No se pudo cargar el reporte tras guardar.",
-                },
-                status_code=500,
-            )
-        ctx = report_context(details)
-        return templates.TemplateResponse(
-            "worker_panel.html",
-            {
-                "request": request,
-                "user": user,
-                "report": details,
-                "report_date": report_date,
-                "history": get_user_reports(user["id"], limit=15),
-                "cumulative": get_cumulative_total(user["id"]),
-                "error": str(exc),
-                **ctx,
-            },
+        return render_worker_panel(
+            request,
+            user,
+            report_date,
+            error=str(exc),
             status_code=400,
         )
 
-    return RedirectResponse(
-        with_query(
-            U.MIS_REPORTES,
-            fecha=report_date,
-            msg=(
-                "Reporte enviado al admin para confirmación"
-                if submit
-                else "Borrador guardado. Puedes salir y continuar más tarde."
+    if submit:
+        return RedirectResponse(
+            with_query(
+                U.MIS_REPORTES,
+                fecha=report_date,
+                msg="Reporte enviado al admin para confirmación",
             ),
-        ),
-        status_code=303,
+            status_code=303,
+        )
+
+    return render_worker_panel(
+        request,
+        user,
+        report_date,
+        message="Borrador guardado. Puedes salir y continuar más tarde.",
     )
 
 
