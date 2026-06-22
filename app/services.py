@@ -409,10 +409,11 @@ def save_admin_entries(
     if details["status"] != REPORT_SUBMITTED:
         raise ValueError("Solo se pueden editar cargues y retiros de reportes enviados")
 
-    save_cargues(report_id, parse_amounts_form(cargue_amounts))
-    save_retiros(report_id, parse_amounts_form(retiro_amounts))
+    cargues = parse_amounts_form(cargue_amounts)
+    retiros = parse_amounts_form(retiro_amounts)
 
     with db_session() as conn:
+        _write_report_entries(conn, report_id, cargues, retiros)
         conn.execute(
             "UPDATE daily_reports SET updated_at = datetime('now') WHERE id = ?",
             (report_id,),

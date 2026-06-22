@@ -239,13 +239,20 @@ def check_db_connection() -> dict:
     """Comprueba que la base responde. Usado en /api/salud y scripts de diagnóstico."""
     try:
         info = db_info()
+        ephemeral = IS_VERCEL and not USE_TURSO
         return {
             "ok": True,
             "engine": info.get("engine"),
             "users": info.get("users", 0),
             "reports": info.get("reports", 0),
             "turso": USE_TURSO,
-            "ephemeral": IS_VERCEL and not USE_TURSO,
+            "ephemeral": ephemeral,
+            "persistent": not ephemeral,
+            "warning": (
+                "Base de datos NO persistente. Configura TURSO_DATABASE_URL y TURSO_AUTH_TOKEN en Vercel."
+                if ephemeral
+                else None
+            ),
         }
     except Exception as exc:
         return {

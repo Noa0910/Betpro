@@ -26,7 +26,7 @@ IS_VERCEL = os.getenv("VERCEL") == "1"
 
 CANONICAL_HOST = os.getenv("BETPRO_CANONICAL_HOST", "www.betpro.management").strip()
 
-APP_VERSION = "2026.06.22-9"
+APP_VERSION = "2026.06.22-10"
 
 
 def _normalize_turso_url(url: str) -> str:
@@ -41,6 +41,7 @@ def _normalize_turso_url(url: str) -> str:
 TURSO_DATABASE_URL = _normalize_turso_url(os.getenv("TURSO_DATABASE_URL", ""))
 TURSO_AUTH_TOKEN = os.getenv("TURSO_AUTH_TOKEN", "").strip()
 USE_TURSO = bool(TURSO_DATABASE_URL and TURSO_AUTH_TOKEN)
+DB_EPHEMERAL = IS_VERCEL and not USE_TURSO
 
 # SQLite local (gratis). En Vercel sin Turso usa /tmp (no persistente).
 _default_db = "/tmp/betpro.db" if IS_VERCEL and not USE_TURSO else str(BASE_DIR / "betpro.db")

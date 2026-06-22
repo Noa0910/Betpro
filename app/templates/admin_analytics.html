@@ -18,6 +18,8 @@
   <div class="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300">{{ error }}</div>
   {% endif %}
 
+  {{ ui.db_persistence_warning() }}
+
   <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-8">
     <div>
       <h2 class="text-3xl font-bold">Dashboard general</h2>

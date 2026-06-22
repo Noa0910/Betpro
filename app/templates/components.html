@@ -73,6 +73,16 @@
 </div>
 {% endmacro %}
 
+{% macro db_persistence_warning() %}
+{% if db_ephemeral %}
+<div class="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/40 text-red-200 text-sm">
+  <strong>Base de datos NO persistente.</strong>
+  Los clientes, usuarios y reportes se pierden al reiniciar Vercel.
+  Configura <code>TURSO_DATABASE_URL</code> y <code>TURSO_AUTH_TOKEN</code> en vercel.com → Settings → Environment Variables.
+</div>
+{% endif %}
+{% endmacro %}
+
 {% macro report_status_badge(report) %}
 {% if report.status == 'confirmed' %}
 <span class="badge-confirmed">Confirmado</span>

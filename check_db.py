@@ -13,7 +13,7 @@ def main() -> None:
 
     if IS_VERCEL and not USE_TURSO:
         print()
-        print("AVISO: En Vercel sin Turso los datos NO persisten.")
+        print("!!! AVISO CRITICO: Sin Turso los datos NO persisten en Vercel !!!")
         print("Configura TURSO_DATABASE_URL y TURSO_AUTH_TOKEN en vercel.com")
 
     try:
