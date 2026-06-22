@@ -18,12 +18,14 @@ from app.services import (
     confirm_report,
     count_pending_reports,
     create_worker,
+    create_admin,
     get_admin_analytics,
     get_cumulative_total,
     get_or_create_report,
     get_report_details,
     get_user_reports,
     list_pending_reports,
+    list_admins,
     list_workers,
     parse_amount,
     reopen_report,
@@ -33,6 +35,7 @@ from app.services import (
     today_iso,
     update_worker_fee,
     update_worker_status,
+    update_admin_status,
 )
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -308,6 +311,65 @@ async def admin_create_worker(
     except Exception as exc:
         return RedirectResponse(with_query(U.CLIENTES, error=str(exc)), status_code=303)
     return RedirectResponse(with_query(U.CLIENTES, msg="Cliente creado"), status_code=303)
+
+
+@app.get(U.ADMINISTRADORES, response_class=HTMLResponse)
+async def admin_users_page(request: Request):
+    try:
+        user = require_admin(request)
+    except Exception:
+        return redirect_login()
+
+    return templates.TemplateResponse(
+        "admin_admins.html",
+        {
+            "request": request,
+            "user": user,
+            "admins": list_admins(),
+            "message": request.query_params.get("msg"),
+            "error": request.query_params.get("error"),
+        },
+    )
+
+
+@app.post(U.ADMINISTRADORES)
+async def admin_create_admin(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    password_confirm: str = Form(...),
+    name: str = Form(...),
+):
+    try:
+        require_admin(request)
+        if password != password_confirm:
+            raise ValueError("Las contraseñas no coinciden")
+        create_admin(username, password, name)
+    except Exception as exc:
+        return RedirectResponse(
+            with_query(U.ADMINISTRADORES, error=str(exc)),
+            status_code=303,
+        )
+    return RedirectResponse(
+        with_query(U.ADMINISTRADORES, msg="Administrador creado"),
+        status_code=303,
+    )
+
+
+@app.post("/administradores/{admin_id}/estado")
+async def admin_toggle_admin(request: Request, admin_id: int, active: str = Form(...)):
+    try:
+        actor = require_admin(request)
+        update_admin_status(admin_id, active == "1", actor["id"])
+    except Exception as exc:
+        return RedirectResponse(
+            with_query(U.ADMINISTRADORES, error=str(exc)),
+            status_code=303,
+        )
+    return RedirectResponse(
+        with_query(U.ADMINISTRADORES, msg="Estado actualizado"),
+        status_code=303,
+    )
 
 
 @app.post("/clientes/{worker_id}/tarifa")

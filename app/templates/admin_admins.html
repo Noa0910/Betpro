@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block title %}Administradores - BetPro{% endblock %}
+{% block body %}
+<header class="app-header sticky top-0 z-10">
+  <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div>
+      <h1 class="text-xl font-bold">BetPro Admin</h1>
+      <p class="text-sm text-gray-400">{{ user.name }}</p>
+    </div>
+    {{ ui.admin_nav('administradores') }}
+    <a href="{{ url.SALIR }}" class="text-sm text-gray-400 hover:text-white sm:ml-auto">Salir</a>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 py-8">
+  {% if message %}
+  <div class="mb-6 p-4 rounded-xl alert-success">{{ message }}</div>
+  {% endif %}
+  {% if error %}
+  <div class="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300">{{ error }}</div>
+  {% endif %}
+
+  <section class="mb-10">
+    <h2 class="text-2xl font-bold mb-2">Administradores</h2>
+    <p class="text-gray-400 mb-6">Cuentas con acceso al panel de reportes y gestión de clientes</p>
+
+    <div class="card overflow-x-auto mb-8">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-gray-400 border-b border-white/10">
+            <th class="pb-3 pr-4">Nombre</th>
+            <th class="pb-3 pr-4">Usuario</th>
+            <th class="pb-3 pr-4">Estado</th>
+            <th class="pb-3">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in admins %}
+          <tr class="border-b border-white/5">
+            <td class="py-4 pr-4 font-medium">
+              {{ a.name }}
+              {% if a.id == user.id %}
+              <span class="text-xs text-gray-500">(tú)</span>
+              {% endif %}
+            </td>
+            <td class="py-4 pr-4 text-gray-400">{{ a.username }}</td>
+            <td class="py-4 pr-4">
+              {% if a.active %}
+              <span class="badge-active">Activo</span>
+              {% else %}
+              <span class="px-2 py-1 rounded-full text-xs bg-red-500/20 text-red-300">Inactivo</span>
+              {% endif %}
+            </td>
+            <td class="py-4">
+              {% if a.id != user.id %}
+              <form method="post" action="{{ url.admin_estado(a.id) }}">
+                <input type="hidden" name="active" value="{{ 0 if a.active else 1 }}">
+                <button type="submit" class="text-sm text-gray-400 hover:text-white">
+                  {{ 'Desactivar' if a.active else 'Activar' }}
+                </button>
+              </form>
+              {% else %}
+              <span class="text-gray-500 text-sm">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="py-6 text-center text-gray-500">No hay administradores</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h3 class="text-lg font-semibold mb-4">Agregar administrador</h3>
+    <form method="post" action="{{ url.ADMINISTRADORES }}" class="card grid md:grid-cols-2 gap-4" data-password-match>
+      <label>
+        <span class="text-sm text-gray-400">Nombre completo</span>
+        <input type="text" name="name" required class="input-field mt-1">
+      </label>
+      <label>
+        <span class="text-sm text-gray-400">Usuario</span>
+        <input type="text" name="username" required class="input-field mt-1" autocomplete="username">
+      </label>
+      <div class="md:col-span-2">
+        {{ ui.password_with_confirm() }}
+      </div>
+      <div class="md:col-span-2">
+        <button type="submit" class="btn-primary">Crear administrador</button>
+      </div>
+    </form>
+  </section>
+</main>
+<script src="/static/app.js"></script>
+{% endblock %}

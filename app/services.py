@@ -364,13 +364,56 @@ def list_workers() -> list[dict]:
 def create_admin(username: str, password: str, name: str) -> None:
     from app.auth import hash_password
 
+    username = username.strip().lower()
+    name = name.strip()
+    if not username or not name or not password:
+        raise ValueError("Nombre, usuario y contraseña son obligatorios")
+
     with db_session() as conn:
+        exists = conn.execute(
+            "SELECT id FROM users WHERE username = ?",
+            (username,),
+        ).fetchone()
+        if exists:
+            raise ValueError("Ese usuario ya está registrado")
+
         conn.execute(
             """
             INSERT INTO users (username, password_hash, name, role, retiro_fee)
             VALUES (?, ?, ?, 'admin', 0)
             """,
-            (username.strip().lower(), hash_password(password), name.strip()),
+            (username, hash_password(password), name),
+        )
+
+
+def list_admins() -> list[dict]:
+    with db_session() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, username, name, role, active, created_at
+            FROM users
+            WHERE role = 'admin'
+            ORDER BY name
+            """
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
+def update_admin_status(admin_id: int, active: bool, actor_id: int) -> None:
+    if admin_id == actor_id and not active:
+        raise ValueError("No puedes desactivar tu propia cuenta")
+
+    with db_session() as conn:
+        row = conn.execute(
+            "SELECT id FROM users WHERE id = ? AND role = 'admin'",
+            (admin_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("Administrador no encontrado")
+
+        conn.execute(
+            "UPDATE users SET active = ? WHERE id = ? AND role = 'admin'",
+            (1 if active else 0, admin_id),
         )
 
 

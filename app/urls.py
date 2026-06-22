@@ -5,6 +5,7 @@ SALIR = "/salir"
 MIS_REPORTES = "/mis-reportes"
 REPORTES = "/reportes"
 CLIENTES = "/clientes"
+ADMINISTRADORES = "/administradores"
 
 
 def mis_reportes_guardar() -> str:
@@ -37,3 +38,7 @@ def cliente_reabrir(worker_id: int) -> str:
 
 def cliente_guardar(worker_id: int) -> str:
     return f"{CLIENTES}/{worker_id}/guardar-datos"
+
+
+def admin_estado(admin_id: int) -> str:
+    return f"{ADMINISTRADORES}/{admin_id}/estado"
