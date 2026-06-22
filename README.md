@@ -112,17 +112,41 @@ BetPro incluye configuración lista para [Vercel](https://vercel.com):
 | `BETPRO_ADMIN_PASSWORD` | Recomendado | Contraseña del admin inicial |
 | `BETPRO_ADMIN_USER` | No | Usuario admin (default: `admin`) |
 
-4. Deploy. La primera visita crea la base de datos y el usuario admin si la BD está vacía.
+4. Deploy. La primera visita crea las tablas y el usuario admin si la BD está vacía.
 
-### Importante: SQLite en Vercel
+### Base de datos persistente en Vercel (Turso — gratis)
 
-En Vercel la app usa `/tmp/betpro.db`. Ese archivo **no persiste** entre despliegues ni en todas las invocaciones serverless. Sirve para **probar el deploy**; para producción real use:
+Sin Turso, Vercel guarda datos en `/tmp` y **se pierden**. Para producción:
 
-- **Turso** (SQLite en la nube, plan gratis), o
-- **Neon / Supabase** (PostgreSQL gratis), o
-- Un VPS con `iniciar.bat` y `betpro.db` local (recomendado para uso interno).
+1. Crea cuenta en [turso.tech](https://turso.tech) (gratis).
+2. Instala CLI (opcional): `curl -sSfL https://get.tur.so/install.sh | bash`
+3. Crea la base de datos:
 
-Para producción persistente con SQLite en la nube, defina `BETPRO_DB_PATH` apuntando a un volumen montado o migre a Turso.
+```bash
+turso auth login
+turso db create betpro
+turso db show betpro --url
+turso db tokens create betpro
+```
+
+4. En **Vercel → Settings → Environment Variables**, añade:
+
+| Variable | Valor |
+|----------|-------|
+| `TURSO_DATABASE_URL` | `libsql://betpro-xxx.turso.io` |
+| `TURSO_AUTH_TOKEN` | token generado arriba |
+| `BETPRO_SECRET` | texto aleatorio largo |
+| `BETPRO_ADMIN_PASSWORD` | contraseña segura del admin |
+
+5. **Redeploy** el proyecto (Deployments → ⋯ → Redeploy).
+
+6. Abre `https://www.betpro.management/login` — usuario `admin` y la contraseña que pusiste en `BETPRO_ADMIN_PASSWORD`.
+
+Turso es SQLite en la nube: mismo motor, datos permanentes, plan gratis suficiente para uso interno.
+
+### Importante: SQLite en /tmp (sin Turso)
+
+Si no configuras Turso, Vercel usa `/tmp/betpro.db`. Ese archivo **no persiste**. Solo sirve para pruebas.
 
 ### Archivos de deploy
 

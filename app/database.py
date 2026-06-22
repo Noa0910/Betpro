@@ -1,10 +1,82 @@
 import sqlite3
 from contextlib import contextmanager
+from typing import Any, Optional
 
-from app.config import DB_PATH
+from app.config import DB_PATH, TURSO_AUTH_TOKEN, TURSO_DATABASE_URL, USE_TURSO
+from app.db_row import DbRow
+
+_turso_client = None
 
 
-def get_connection() -> sqlite3.Connection:
+class _TursoCursor:
+    def __init__(self, result_set):
+        self._result = result_set
+        self._index = 0
+
+    def _make_row(self, values: tuple) -> DbRow:
+        return DbRow(self._result.columns, values)
+
+    def fetchone(self) -> Optional[DbRow]:
+        if self._index >= len(self._result.rows):
+            return None
+        row = self._make_row(tuple(self._result.rows[self._index]))
+        self._index += 1
+        return row
+
+    def fetchall(self) -> list[DbRow]:
+        rows = []
+        while True:
+            row = self.fetchone()
+            if row is None:
+                break
+            rows.append(row)
+        return rows
+
+    @property
+    def lastrowid(self) -> int:
+        return int(self._result.last_insert_rowid or 0)
+
+
+class _TursoConnection:
+    def __init__(self, client):
+        self._client = client
+
+    def execute(self, sql: str, params: tuple | list = ()):
+        args = list(params) if params else None
+        result = self._client.execute(sql, args)
+        return _TursoCursor(result)
+
+    def executescript(self, sql: str) -> None:
+        statements = [part.strip() for part in sql.split(";") if part.strip()]
+        for statement in statements:
+            self._client.execute(statement)
+
+    def commit(self) -> None:
+        return None
+
+    def rollback(self) -> None:
+        return None
+
+    def close(self) -> None:
+        return None
+
+
+def _get_turso_client():
+    global _turso_client
+    if _turso_client is None:
+        import libsql_client
+
+        _turso_client = libsql_client.create_client_sync(
+            TURSO_DATABASE_URL,
+            auth_token=TURSO_AUTH_TOKEN,
+        )
+    return _turso_client
+
+
+def get_connection() -> Any:
+    if USE_TURSO:
+        return _TursoConnection(_get_turso_client())
+
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -27,7 +99,7 @@ def db_session():
         conn.close()
 
 
-def _migrate(conn: sqlite3.Connection) -> None:
+def _migrate(conn) -> None:
     report_cols = {row[1] for row in conn.execute("PRAGMA table_info(daily_reports)").fetchall()}
     if "status" not in report_cols:
         conn.execute(
@@ -63,7 +135,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
         )
 
 
-def _create_indexes(conn: sqlite3.Connection) -> None:
+def _create_indexes(conn) -> None:
     conn.executescript(
         """
         CREATE INDEX IF NOT EXISTS idx_reports_user_date
@@ -139,9 +211,22 @@ def init_db() -> None:
 
 
 def db_info() -> dict:
-    """Información básica de la base de datos (útil para admin/diagnóstico)."""
+    engine = "Turso (SQLite en la nube)" if USE_TURSO else "SQLite 3 (archivo local)"
+
+    if USE_TURSO:
+        with db_session() as conn:
+            users = conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"]
+            reports = conn.execute("SELECT COUNT(*) AS c FROM daily_reports").fetchone()["c"]
+        return {
+            "exists": True,
+            "path": TURSO_DATABASE_URL,
+            "engine": engine,
+            "users": users,
+            "reports": reports,
+        }
+
     if not DB_PATH.exists():
-        return {"exists": False, "path": str(DB_PATH), "engine": "SQLite"}
+        return {"exists": False, "path": str(DB_PATH), "engine": engine}
 
     size_mb = round(DB_PATH.stat().st_size / (1024 * 1024), 2)
     with db_session() as conn:
@@ -151,7 +236,7 @@ def db_info() -> dict:
     return {
         "exists": True,
         "path": str(DB_PATH),
-        "engine": "SQLite 3 (gratis, archivo local)",
+        "engine": engine,
         "size_mb": size_mb,
         "users": users,
         "reports": reports,

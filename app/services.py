@@ -35,15 +35,16 @@ def get_or_create_report(user_id: int, report_date: str) -> dict:
         if row:
             return dict(row)
 
-        cursor = conn.execute(
+        row = conn.execute(
             """
             INSERT INTO daily_reports (user_id, report_date, status)
             VALUES (?, ?, 'draft')
+            RETURNING id
             """,
             (user_id, report_date),
-        )
+        ).fetchone()
         return {
-            "id": cursor.lastrowid,
+            "id": row["id"],
             "user_id": user_id,
             "report_date": report_date,
             "status": REPORT_DRAFT,

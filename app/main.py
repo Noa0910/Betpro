@@ -54,7 +54,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.on_event("startup")
 def startup() -> None:
-    from seed import seed_if_empty
+    from app.bootstrap import seed_if_empty
 
     seed_if_empty()
 
