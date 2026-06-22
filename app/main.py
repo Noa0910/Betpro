@@ -296,11 +296,14 @@ async def admin_create_worker(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
+    password_confirm: str = Form(...),
     name: str = Form(...),
     retiro_fee: str = Form("50"),
 ):
     try:
         require_admin(request)
+        if password != password_confirm:
+            raise ValueError("Las contraseñas no coinciden")
         create_worker(username, password, name, parse_amount(retiro_fee))
     except Exception as exc:
         return RedirectResponse(with_query(U.CLIENTES, error=str(exc)), status_code=303)

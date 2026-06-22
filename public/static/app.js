@@ -96,6 +96,8 @@ function initDiscountList(container) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  initPasswordFields();
+
   document.querySelectorAll("[data-amount-widget]").forEach((widget) => {
     let initial = [];
     try {
@@ -113,3 +115,50 @@ document.addEventListener("DOMContentLoaded", () => {
     initDiscountList(widget);
   });
 });
+
+function initPasswordFields() {
+  document.querySelectorAll("[data-password-toggle]").forEach((toggle) => {
+    const wrap = toggle.closest("[data-password-field]");
+    const input = wrap?.querySelector("[data-password-input]");
+    const eye = toggle.querySelector(".icon-eye");
+    const eyeOff = toggle.querySelector(".icon-eye-off");
+    if (!input) return;
+
+    toggle.addEventListener("click", () => {
+      const show = input.type === "password";
+      input.type = show ? "text" : "password";
+      eye?.classList.toggle("hidden", show);
+      eyeOff?.classList.toggle("hidden", !show);
+      toggle.setAttribute("aria-label", show ? "Ocultar contraseña" : "Ver contraseña");
+      toggle.title = show ? "Ocultar contraseña" : "Ver contraseña";
+    });
+  });
+
+  document.querySelectorAll("[data-password-match]").forEach((group) => {
+    const form = group.closest("form") || group;
+    const password = group.querySelector('[name="password"]');
+    const confirm = group.querySelector('[name="password_confirm"]');
+    const error = group.querySelector("[data-password-match-error]");
+    if (!password || !confirm) return;
+
+    function validateMatch() {
+      const mismatch = confirm.value && password.value !== confirm.value;
+      confirm.setCustomValidity(mismatch ? "Las contraseñas no coinciden" : "");
+      if (error) {
+        error.classList.toggle("hidden", !mismatch);
+      }
+      return !mismatch;
+    }
+
+    password.addEventListener("input", validateMatch);
+    confirm.addEventListener("input", validateMatch);
+
+    form.addEventListener("submit", (event) => {
+      if (!validateMatch() || password.value !== confirm.value) {
+        event.preventDefault();
+        confirm.reportValidity?.();
+        confirm.focus();
+      }
+    });
+  });
+}

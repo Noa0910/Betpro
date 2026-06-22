@@ -4,3 +4,205 @@
   <a href="{{ url.CLIENTES }}" class="admin-nav-link {% if active == 'clientes' %}active{% endif %}">Clientes</a>
 </nav>
 {% endmacro %}
+
+{% macro password_field(label, name, required=true, autocomplete="current-password") %}
+<label class="password-field block" data-password-field>
+  <span class="text-sm text-gray-400">{{ label }}</span>
+  <div class="password-input-wrap mt-1">
+    <input
+      type="password"
+      name="{{ name }}"
+      class="input-field password-input"
+      data-password-input
+      {% if required %}required{% endif %}
+      autocomplete="{{ autocomplete }}"
+    >
+    <button type="button" class="password-toggle" data-password-toggle aria-label="Ver contraseña" title="Ver contraseña">
+      <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg>
+      <svg class="icon-eye-off hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+        <line x1="1" y1="1" x2="23" y2="23"/>
+      </svg>
+    </button>
+  </div>
+</label>
+{% endmacro %}
+
+{% macro password_with_confirm(password_label="Contraseña", confirm_label="Confirmar contraseña") %}
+<div class="password-match-group" data-password-match>
+  {{ password_field(password_label, "password", required=true, autocomplete="new-password") }}
+  {{ password_field(confirm_label, "password_confirm", required=true, autocomplete="new-password") }}
+  <p class="password-match-error hidden" data-password-match-error>Las contraseñas no coinciden.</p>
+</div>
+{% endmacro %}
+
+{% macro cumulative_banner(total, subtitle="") %}
+<div class="cumulative-banner">
+  <p class="label">Total acumulado</p>
+  <p class="value">{{ total | money }}</p>
+  {% if subtitle %}
+  <p class="sub">{{ subtitle }}</p>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% macro report_status_badge(report) %}
+{% if report.status == 'confirmed' %}
+<span class="badge-confirmed">Confirmado</span>
+{% elif report.status == 'submitted' %}
+<span class="badge-pending">Enviado — esperando admin</span>
+{% else %}
+<span class="badge-pending" style="background:rgba(156,163,175,0.15);color:#d1d5db">Borrador</span>
+{% endif %}
+{% endmacro %}
+
+{% macro amount_widget(title, hint, amount_name, items, locked=false) %}
+<div class="card" data-amount-widget
+     data-amount-name="{{ amount_name }}"
+     data-initial='{{ items | tojson }}'
+     {% if locked %}data-locked="true"{% endif %}>
+  <div class="amount-widget-header">
+    <div>
+      <h3 class="card-title">{{ title }}</h3>
+      <p class="text-sm text-gray-400">{{ hint }}</p>
+    </div>
+    {% if not locked %}
+    <button type="button" class="btn-add" data-add-btn title="Agregar">+</button>
+    {% endif %}
+  </div>
+  <div class="amount-list" data-amount-list></div>
+  <div class="widget-total">Subtotal: <strong data-list-total>$0.00</strong></div>
+</div>
+{% endmacro %}
+
+{% macro discounts_readonly(discounts, total) %}
+<div class="card">
+  <h3 class="card-title">Descuentos aplicados</h3>
+  <p class="text-sm text-gray-400 mb-4">Agregados por el administrador (cuentas, códigos, etc.)</p>
+  {% if discounts %}
+  <div class="discount-readonly-list">
+    {% for d in discounts %}
+    <div class="discount-readonly-item">
+      <span>{{ d.description }}</span>
+      <span>− {{ d.amount | money }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="widget-total mt-4">Total descuentos: <strong style="color:#fb923c">{{ total | money }}</strong></p>
+  {% else %}
+  <p class="empty-hint">Sin descuentos — el admin los agrega al confirmar</p>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% macro discount_widget_admin(discounts, locked=false) %}
+<div class="card" data-discount-widget data-initial='{{ discounts | tojson }}' {% if locked %}data-locked="true"{% endif %}>
+  <div class="amount-widget-header">
+    <div>
+      <h3 class="card-title">Extras / Descuentos</h3>
+      <p class="text-sm text-gray-400">Cuentas, códigos u otros costos antes de confirmar</p>
+    </div>
+    {% if not locked %}
+    <button type="button" class="btn-add" data-add-discount title="Agregar descuento">+</button>
+    {% endif %}
+  </div>
+  <div data-discount-list></div>
+</div>
+{% endmacro %}
+
+{% macro client_report_readonly(report) %}
+<div class="grid md:grid-cols-2 gap-6">
+  <div class="card">
+    <h3 class="card-title">Cargues del día</h3>
+    {% for c in report.cargues %}
+    <div class="readonly-amount">{{ c.amount | money }}</div>
+    {% else %}
+    <p class="empty-hint">Sin cargues</p>
+    {% endfor %}
+    <p class="widget-total">Total: <strong>{{ report.summary.total_cargues | money }}</strong></p>
+  </div>
+  <div class="card">
+    <h3 class="card-title">Retiros del día</h3>
+    {% for r in report.retiros %}
+    <div class="readonly-amount">{{ r.amount | money }}</div>
+    {% else %}
+    <p class="empty-hint">Sin retiros</p>
+    {% endfor %}
+    <p class="widget-total">Total: <strong>{{ report.summary.total_retiros | money }}</strong></p>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro summary_boxes(report, retiro_fee) %}
+<div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+  <div class="stat-box">
+    <span class="stat-label">Tarifa por retiro</span>
+    <span class="stat-value">{{ retiro_fee | money }}</span>
+  </div>
+  <div class="stat-box">
+    <span class="stat-label">Retiros × tarifa</span>
+    <span class="stat-value">{{ report.summary.num_retiros }} × {{ retiro_fee | money }} = {{ report.summary.total_fees | money }}</span>
+  </div>
+  <div class="stat-box">
+    <span class="stat-label">Descuentos</span>
+    <span class="stat-value">{{ report.summary.total_discounts | money }}</span>
+  </div>
+  <div class="stat-box stat-box-highlight">
+    <span class="stat-label">
+      {% if report.summary.is_confirmed %}Total del día{% else %}Total estimado{% endif %}
+    </span>
+    <span class="stat-value text-betpro-400 text-2xl">
+      {% if report.summary.is_confirmed %}
+        {{ report.summary.daily_total | money }}
+      {% else %}
+        {{ report.summary.preview_total | money }}
+      {% endif %}
+    </span>
+    {% if not report.summary.is_confirmed %}
+    <span class="text-xs text-gray-400 mt-1 block">Cuenta cuando el admin confirme el reporte</span>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+{% macro history_table(history) %}
+<div class="card overflow-x-auto">
+  <h3 class="card-title mb-4">Historial reciente</h3>
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="text-left text-gray-400 border-b border-white/10">
+        <th class="pb-3 pr-4">Fecha</th>
+        <th class="pb-3 pr-4">Estado</th>
+        <th class="pb-3 pr-4">Cargues</th>
+        <th class="pb-3 pr-4">Retiros</th>
+        <th class="pb-3 pr-4">Día</th>
+        <th class="pb-3">Acumulado</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for h in history %}
+      <tr class="border-b border-white/5 hover:bg-white/5">
+        <td class="py-3 pr-4">{{ h.report_date }}</td>
+        <td class="py-3 pr-4">{{ report_status_badge(h) }}</td>
+        <td class="py-3 pr-4">{{ h.summary.total_cargues | money }}</td>
+        <td class="py-3 pr-4">{{ h.summary.total_retiros | money }}</td>
+        <td class="py-3 pr-4 {% if h.summary.daily_total >= 0 %}text-betpro-400{% else %}text-red-400{% endif %}">
+          {% if h.summary.is_confirmed %}
+            {{ h.summary.daily_total | money }}
+          {% else %}
+            <span class="text-gray-500">{{ h.summary.preview_total | money }}</span>
+          {% endif %}
+        </td>
+        <td class="py-3 font-semibold">{{ h.cumulative_total | money }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="py-6 text-center text-gray-500">Sin reportes guardados</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endmacro %}
