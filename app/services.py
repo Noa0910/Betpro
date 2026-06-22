@@ -36,6 +36,16 @@ def parse_amounts_form(values: list[str]) -> list[float]:
     return [parse_amount(v) for v in values if v and v.strip()]
 
 
+def _as_int(value) -> int:
+    return int(value)
+
+
+def _as_float(value) -> float:
+    if value is None:
+        return 0.0
+    return float(value)
+
+
 def get_or_create_report(user_id: int, report_date: str) -> dict:
     with db_session() as conn:
         row = conn.execute(
@@ -112,7 +122,7 @@ def _calc_totals(report: dict, include_in_official: bool) -> dict:
     total_cargues = round(sum(c["amount"] for c in report["cargues"]), 2)
     total_retiros = round(sum(r["amount"] for r in report["retiros"]), 2)
     num_retiros = len(report["retiros"])
-    retiro_fee = float(report["retiro_fee"])
+    retiro_fee = _as_float(report.get("retiro_fee"))
     total_fees = round(num_retiros * retiro_fee, 2)
     total_discounts = round(sum(d["amount"] for d in report["discounts"]), 2)
     computed = round(total_retiros - total_cargues - total_fees - total_discounts, 2)
@@ -144,29 +154,37 @@ def _load_report_children(conn, report_ids: list[int]) -> tuple[dict, dict, dict
         return {}, {}, {}
 
     placeholders = ",".join("?" * len(report_ids))
-    cargues_map: dict[int, list] = {rid: [] for rid in report_ids}
-    retiros_map: dict[int, list] = {rid: [] for rid in report_ids}
-    discounts_map: dict[int, list] = {rid: [] for rid in report_ids}
 
-    params = tuple(report_ids)
+    params = tuple(_as_int(rid) for rid in report_ids)
+    cargues_map = {_as_int(rid): [] for rid in report_ids}
+    retiros_map = {_as_int(rid): [] for rid in report_ids}
+    discounts_map = {_as_int(rid): [] for rid in report_ids}
+
     for row in conn.execute(
         f"SELECT id, report_id, amount FROM cargues WHERE report_id IN ({placeholders}) ORDER BY id",
         params,
     ).fetchall():
-        cargues_map[row["report_id"]].append({"id": row["id"], "amount": row["amount"]})
+        rid = _as_int(row["report_id"])
+        cargues_map[rid].append({"id": _as_int(row["id"]), "amount": _as_float(row["amount"])})
 
     for row in conn.execute(
         f"SELECT id, report_id, amount FROM retiros WHERE report_id IN ({placeholders}) ORDER BY id",
         params,
     ).fetchall():
-        retiros_map[row["report_id"]].append({"id": row["id"], "amount": row["amount"]})
+        rid = _as_int(row["report_id"])
+        retiros_map[rid].append({"id": _as_int(row["id"]), "amount": _as_float(row["amount"])})
 
     for row in conn.execute(
         f"SELECT id, report_id, description, amount FROM discounts WHERE report_id IN ({placeholders}) ORDER BY id",
         params,
     ).fetchall():
-        discounts_map[row["report_id"]].append(
-            {"id": row["id"], "description": row["description"], "amount": row["amount"]}
+        rid = _as_int(row["report_id"])
+        discounts_map[rid].append(
+            {
+                "id": _as_int(row["id"]),
+                "description": row["description"],
+                "amount": _as_float(row["amount"]),
+            }
         )
 
     return cargues_map, retiros_map, discounts_map
@@ -174,7 +192,12 @@ def _load_report_children(conn, report_ids: list[int]) -> tuple[dict, dict, dict
 
 def _build_report_row(row, cargues_map, retiros_map, discounts_map) -> dict:
     data = dict(row)
-    rid = data["id"]
+    rid = _as_int(data["id"])
+    data["id"] = rid
+    if "user_id" in data:
+        data["user_id"] = _as_int(data["user_id"])
+    if "retiro_fee" in data:
+        data["retiro_fee"] = _as_float(data["retiro_fee"])
     data["cargues"] = cargues_map.get(rid, [])
     data["retiros"] = retiros_map.get(rid, [])
     data["discounts"] = discounts_map.get(rid, [])
@@ -189,7 +212,7 @@ def get_cumulative_totals_batch(user_ids: list[int]) -> dict[int, float]:
     if not user_ids:
         return {}
 
-    totals = {uid: 0.0 for uid in user_ids}
+    totals = {_as_int(uid): 0.0 for uid in user_ids}
     with db_session() as conn:
         placeholders = ",".join("?" * len(user_ids))
         rows = conn.execute(
@@ -210,10 +233,8 @@ def get_cumulative_totals_batch(user_ids: list[int]) -> dict[int, float]:
 
     for row in rows:
         report = _build_report_row(row, cargues_map, retiros_map, discounts_map)
-        totals[row["user_id"]] = round(
-            totals[row["user_id"]] + report["summary"]["daily_total"],
-            2,
-        )
+        uid = _as_int(row["user_id"])
+        totals[uid] = round(totals[uid] + report["summary"]["daily_total"], 2)
     return totals
 
 
@@ -593,13 +614,16 @@ def _load_reports_index() -> tuple[list[dict], dict, dict, dict]:
             ).fetchall()
         ]
         cargues = {
-            row["report_id"]: row["total"]
+            _as_int(row["report_id"]): _as_float(row["total"])
             for row in conn.execute(
                 "SELECT report_id, SUM(amount) AS total FROM cargues GROUP BY report_id"
             ).fetchall()
         }
         retiros = {
-            row["report_id"]: {"total": row["total"], "count": row["cnt"]}
+            _as_int(row["report_id"]): {
+                "total": _as_float(row["total"]),
+                "count": _as_int(row["cnt"]),
+            }
             for row in conn.execute(
                 """
                 SELECT report_id, SUM(amount) AS total, COUNT(*) AS cnt
@@ -608,7 +632,7 @@ def _load_reports_index() -> tuple[list[dict], dict, dict, dict]:
             ).fetchall()
         }
         discounts = {
-            row["report_id"]: row["total"]
+            _as_int(row["report_id"]): _as_float(row["total"])
             for row in conn.execute(
                 "SELECT report_id, SUM(amount) AS total FROM discounts GROUP BY report_id"
             ).fetchall()
@@ -622,12 +646,12 @@ def _report_summary_row(
     retiros: dict,
     discounts: dict,
 ) -> dict:
-    rid = report["id"]
+    rid = _as_int(report["id"])
     total_cargues = round(float(cargues.get(rid, 0) or 0), 2)
     retiro_data = retiros.get(rid, {"total": 0, "count": 0})
     total_retiros = round(float(retiro_data["total"] or 0), 2)
     num_retiros = int(retiro_data["count"] or 0)
-    retiro_fee = float(report["retiro_fee"])
+    retiro_fee = _as_float(report.get("retiro_fee"))
     total_fees = round(num_retiros * retiro_fee, 2)
     total_discounts = round(float(discounts.get(rid, 0) or 0), 2)
     preview = round(total_retiros - total_cargues - total_fees - total_discounts, 2)

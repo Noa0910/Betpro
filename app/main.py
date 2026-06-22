@@ -128,8 +128,10 @@ async def unhandled_error(request: StarletteRequest, exc: Exception):
     return HTMLResponse("Error interno del servidor", status_code=500)
 
 
-def fmt_money(value: float) -> str:
-    return f"${value:,.2f}"
+def fmt_money(value) -> str:
+    if value is None:
+        value = 0.0
+    return f"${float(value):,.2f}"
 
 
 templates.env.filters["money"] = fmt_money

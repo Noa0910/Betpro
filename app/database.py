@@ -8,13 +8,29 @@ from app.db_row import DbRow
 _turso_client = None
 
 
+def _normalize_turso_value(column: str, value):
+    """Turso/libsql puede devolver enteros como str; normaliza tipos."""
+    if value is None:
+        return None
+    name = column.lower()
+    if name in ("id", "active", "cnt", "count") or name.endswith("_id"):
+        return int(value)
+    if name in ("amount", "retiro_fee", "total") or name.startswith("total_"):
+        return float(value)
+    return value
+
+
 class _TursoCursor:
     def __init__(self, result_set):
         self._result = result_set
         self._index = 0
 
     def _make_row(self, values: tuple) -> DbRow:
-        return DbRow(self._result.columns, values)
+        cols = self._result.columns
+        normalized = tuple(
+            _normalize_turso_value(col, val) for col, val in zip(cols, values)
+        )
+        return DbRow(cols, normalized)
 
     def fetchone(self) -> Optional[DbRow]:
         if self._index >= len(self._result.rows):
