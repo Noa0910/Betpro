@@ -2,7 +2,7 @@ import sqlite3
 from contextlib import contextmanager
 from typing import Any, Optional
 
-from app.config import DB_PATH, TURSO_AUTH_TOKEN, TURSO_DATABASE_URL, USE_TURSO
+from app.config import DB_PATH, IS_VERCEL, TURSO_AUTH_TOKEN, TURSO_DATABASE_URL, USE_TURSO
 from app.db_row import DbRow
 
 _turso_client = None
@@ -230,8 +230,30 @@ def init_db() -> None:
             );
             """
         )
-        _migrate(conn)
+        if not USE_TURSO:
+            _migrate(conn)
         _create_indexes(conn)
+
+
+def check_db_connection() -> dict:
+    """Comprueba que la base responde. Usado en /api/salud y scripts de diagnóstico."""
+    try:
+        info = db_info()
+        return {
+            "ok": True,
+            "engine": info.get("engine"),
+            "users": info.get("users", 0),
+            "reports": info.get("reports", 0),
+            "turso": USE_TURSO,
+            "ephemeral": IS_VERCEL and not USE_TURSO,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "turso": USE_TURSO,
+            "ephemeral": IS_VERCEL and not USE_TURSO,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
 
 
 def db_info() -> dict:

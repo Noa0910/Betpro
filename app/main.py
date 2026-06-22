@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 
 from fastapi import FastAPI, Form, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -75,13 +75,40 @@ async def redirect_canonical_host(request: Request, call_next):
 @app.on_event("startup")
 def startup() -> None:
     from app.bootstrap import seed_if_empty
+    from app.database import check_db_connection
 
     if IS_VERCEL and not USE_TURSO:
         print(
             "ADVERTENCIA: Turso no configurado en Vercel. "
-            "Configura TURSO_DATABASE_URL y TURSO_AUTH_TOKEN."
+            "Los datos se pierden en cada reinicio. "
+            "Agrega TURSO_DATABASE_URL y TURSO_AUTH_TOKEN en Vercel."
         )
-    seed_if_empty()
+
+    try:
+        seed_if_empty()
+        status = check_db_connection()
+        if status.get("ok"):
+            print(
+                f"BD OK ({status.get('engine')}): "
+                f"{status.get('users')} usuarios, {status.get('reports')} reportes"
+            )
+        else:
+            print(f"BD ERROR: {status.get('error')}")
+    except Exception as exc:
+        print(f"BD STARTUP ERROR: {type(exc).__name__}: {exc}")
+
+
+@app.get("/api/salud")
+async def health_check():
+    from app.database import check_db_connection
+
+    db = check_db_connection()
+    payload = {
+        "ok": db.get("ok", False),
+        "version": APP_VERSION,
+        "database": db,
+    }
+    return JSONResponse(payload, status_code=200 if db.get("ok") else 503)
 
 
 @app.exception_handler(RequestValidationError)
