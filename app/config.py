@@ -16,6 +16,6 @@ DB_PATH = Path(os.getenv("BETPRO_DB_PATH", _default_db))
 BACKUP_DIR = BASE_DIR / "backups"
 
 # Credenciales iniciales (solo si la BD está vacía)
-ADMIN_USERNAME = os.getenv("BETPRO_ADMIN_USER", "admin")
-ADMIN_PASSWORD = os.getenv("BETPRO_ADMIN_PASSWORD", "admin123")
-ADMIN_NAME = os.getenv("BETPRO_ADMIN_NAME", "Administrador BetPro")
+ADMIN_USERNAME = os.getenv("BETPRO_ADMIN_USER", "nosorio")
+ADMIN_PASSWORD = os.getenv("BETPRO_ADMIN_PASSWORD", "Nosorio2026!")
+ADMIN_NAME = os.getenv("BETPRO_ADMIN_NAME", "Nicolas Osorio")

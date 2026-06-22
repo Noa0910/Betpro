@@ -74,13 +74,20 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 Abre: http://127.0.0.1:8000
 
-## Usuarios de prueba
+## Usuario admin inicial
 
-| Rol | Usuario | Contraseña |
-|-----|---------|------------|
-| Admin | admin | admin123 |
-| Cliente | juan | juan123 |
-| Cliente | maria | maria123 |
+| Campo | Valor |
+|-------|-------|
+| Nombre | Nicolas Osorio |
+| Usuario | `nosorio` |
+| Contraseña | `Nosorio2026!` (cámbiala en producción con `BETPRO_ADMIN_PASSWORD`) |
+| Rol | admin |
+
+Para resetear la base de datos local:
+
+```powershell
+python reset_db.py
+```
 
 ## Cuándo migrar a otra base de datos
 
@@ -110,7 +117,7 @@ BetPro incluye configuración lista para [Vercel](https://vercel.com):
 |----------|-------------|-------------|
 | `BETPRO_SECRET` | Sí | Texto largo aleatorio para sesiones |
 | `BETPRO_ADMIN_PASSWORD` | Recomendado | Contraseña del admin inicial |
-| `BETPRO_ADMIN_USER` | No | Usuario admin (default: `admin`) |
+| `BETPRO_ADMIN_USER` | No | Usuario admin (default: `nosorio`) |
 
 4. Deploy. La primera visita crea las tablas y el usuario admin si la BD está vacía.
 
@@ -140,7 +147,7 @@ turso db tokens create betpro
 
 5. **Redeploy** el proyecto (Deployments → ⋯ → Redeploy).
 
-6. Abre `https://www.betpro.management/login` — usuario `admin` y la contraseña que pusiste en `BETPRO_ADMIN_PASSWORD`.
+6. Abre `https://www.betpro.management/login` — usuario `nosorio` y la contraseña en `BETPRO_ADMIN_PASSWORD`.
 
 Turso es SQLite en la nube: mismo motor, datos permanentes, plan gratis suficiente para uso interno.
 
