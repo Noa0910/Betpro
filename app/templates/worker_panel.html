@@ -26,7 +26,7 @@
   <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
     <div>
       <h2 class="text-2xl font-bold">Reporte diario</h2>
-      <p class="text-gray-400">Guarda y se envía al admin para confirmación</p>
+      <p class="text-gray-400">Guarda el avance del día y envía al admin cuando termines</p>
     </div>
     <div class="flex items-center gap-3">
       {{ ui.report_status_badge(report) }}
@@ -42,6 +42,11 @@
   <div class="mb-6 p-4 rounded-xl alert-warning text-sm">
     Reporte enviado. Cargues y retiros están bloqueados — solo el admin puede modificarlos.
     Si guardaste por error, pide al admin que te <strong>habilite la edición</strong> de nuevo.
+  </div>
+  {% elif report.status == 'draft' and (report.cargues or report.retiros or report.notes) %}
+  <div class="mb-6 p-4 rounded-xl alert-info text-sm">
+    Tienes un borrador guardado. Puedes salir, volver a entrar y seguir editando.
+    Cuando termines el día, usa <strong>Guardar y enviar</strong>.
   </div>
   {% elif report.status == 'confirmed' %}
   <div class="mb-6 p-4 rounded-xl alert-success text-sm">
@@ -67,7 +72,21 @@
 
     {{ ui.summary_boxes(report, report.retiro_fee) }}
 
-    <button type="submit" class="btn-primary">Enviar reporte del día</button>
+    <div class="form-actions">
+      <button type="submit" name="action" value="draft" class="btn-secondary">
+        Guardar
+      </button>
+      <button
+        type="submit"
+        name="action"
+        value="submit"
+        class="btn-primary"
+        onclick="return confirm('¿Enviar reporte al admin? Después no podrás editarlo hasta que te habiliten.')"
+      >
+        Guardar y enviar
+      </button>
+    </div>
+    <p class="text-xs text-gray-500">Usa <strong>Guardar</strong> para ir anotando durante el día. <strong>Guardar y enviar</strong> lo manda al admin.</p>
   </form>
   {% else %}
   {{ ui.client_report_readonly(report) }}

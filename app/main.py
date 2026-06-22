@@ -302,14 +302,22 @@ async def worker_save_report(
     cargue_amount: list[str] = Form(default=[]),
     retiro_amount: list[str] = Form(default=[]),
     notes: str = Form(""),
+    action: str = Form("draft"),
 ):
     user, auth_redirect = check_user_session(request)
     if auth_redirect:
         return auth_redirect
 
+    submit = action == "submit"
     report = get_or_create_report(user["id"], report_date)
     try:
-        save_client_report(report["id"], cargue_amount, retiro_amount, notes)
+        save_client_report(
+            report["id"],
+            cargue_amount,
+            retiro_amount,
+            notes,
+            submit=submit,
+        )
     except ValueError as exc:
         details = get_report_details(report["id"])
         if not details:
@@ -341,7 +349,11 @@ async def worker_save_report(
         with_query(
             U.MIS_REPORTES,
             fecha=report_date,
-            msg="Reporte enviado al admin para confirmación",
+            msg=(
+                "Reporte enviado al admin para confirmación"
+                if submit
+                else "Borrador guardado. Puedes salir y continuar más tarde."
+            ),
         ),
         status_code=303,
     )

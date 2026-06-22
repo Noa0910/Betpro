@@ -363,6 +363,13 @@ body {
   border-color: var(--bp-green-light);
 }
 
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
 .stat-box {
   background: rgba(4, 10, 7, 0.55);
   border: 1px solid var(--bp-border);

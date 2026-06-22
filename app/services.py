@@ -327,6 +327,8 @@ def save_client_report(
     cargue_amounts: list[str],
     retiro_amounts: list[str],
     notes: str = "",
+    *,
+    submit: bool = False,
 ) -> dict:
     details = get_report_details(report_id)
     if not details:
@@ -334,23 +336,43 @@ def save_client_report(
     if details["status"] == REPORT_CONFIRMED:
         raise ValueError("Este reporte ya fue confirmado por el admin y no se puede editar")
     if details["status"] == REPORT_SUBMITTED:
-        raise ValueError("Reporte enviado. Solo el admin puede modificar cargues y retiros. Pídele que te habilite la edición.")
+        raise ValueError(
+            "Reporte enviado. Solo el admin puede modificar cargues y retiros. "
+            "Pídele que te habilite la edición."
+        )
 
-    save_cargues(report_id, parse_amounts_form(cargue_amounts))
-    save_retiros(report_id, parse_amounts_form(retiro_amounts))
+    cargues = parse_amounts_form(cargue_amounts)
+    retiros = parse_amounts_form(retiro_amounts)
+
+    if submit and not cargues and not retiros:
+        raise ValueError("Agrega al menos un cargue o retiro antes de enviar al admin.")
+
+    save_cargues(report_id, cargues)
+    save_retiros(report_id, retiros)
 
     with db_session() as conn:
-        conn.execute(
-            """
-            UPDATE daily_reports
-            SET notes = ?,
-                status = 'submitted',
-                submitted_at = datetime('now'),
-                updated_at = datetime('now')
-            WHERE id = ?
-            """,
-            (notes.strip() or None, report_id),
-        )
+        if submit:
+            conn.execute(
+                """
+                UPDATE daily_reports
+                SET notes = ?,
+                    status = 'submitted',
+                    submitted_at = datetime('now'),
+                    updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (notes.strip() or None, report_id),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE daily_reports
+                SET notes = ?,
+                    updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (notes.strip() or None, report_id),
+            )
 
     return get_report_details(report_id)
 
