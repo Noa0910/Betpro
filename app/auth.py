@@ -1,8 +1,10 @@
 from typing import Optional
 
 import bcrypt
-from fastapi import HTTPException, Request, status
+from fastapi import Request
+from fastapi.responses import RedirectResponse
 
+from app import urls as U
 from app.database import db_session
 
 
@@ -47,18 +49,21 @@ def authenticate_user(username: str, password: str) -> Optional[dict]:
     }
 
 
-def require_user(request: Request) -> dict:
+def login_redirect() -> RedirectResponse:
+    return RedirectResponse(U.ACCESO, status_code=303)
+
+
+def check_user_session(request: Request) -> tuple[Optional[dict], Optional[RedirectResponse]]:
     user = request.session.get("user")
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_303_SEE_OTHER,
-            headers={"Location": "/acceso"},
-        )
-    return user
+        return None, login_redirect()
+    return user, None
 
 
-def require_admin(request: Request) -> dict:
-    user = require_user(request)
+def check_admin_session(request: Request) -> tuple[Optional[dict], Optional[RedirectResponse]]:
+    user = request.session.get("user")
+    if not user:
+        return None, login_redirect()
     if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Acceso denegado")
-    return user
+        return None, RedirectResponse(U.MIS_REPORTES, status_code=303)
+    return user, None

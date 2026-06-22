@@ -420,13 +420,25 @@ def update_admin_status(admin_id: int, active: bool, actor_id: int) -> None:
 def create_worker(username: str, password: str, name: str, retiro_fee: float) -> None:
     from app.auth import hash_password
 
+    username = username.strip().lower()
+    name = name.strip()
+    if not username or not name or not password:
+        raise ValueError("Nombre, usuario y contraseña son obligatorios")
+
     with db_session() as conn:
+        exists = conn.execute(
+            "SELECT id FROM users WHERE username = ?",
+            (username,),
+        ).fetchone()
+        if exists:
+            raise ValueError("Ese usuario ya está registrado")
+
         conn.execute(
             """
             INSERT INTO users (username, password_hash, name, role, retiro_fee)
             VALUES (?, ?, ?, 'worker', ?)
             """,
-            (username.strip().lower(), hash_password(password), name.strip(), retiro_fee),
+            (username, hash_password(password), name, retiro_fee),
         )
 
 

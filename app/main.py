@@ -1,6 +1,4 @@
 import json
-import os
-import secrets
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -11,7 +9,8 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from app import urls as U
-from app.auth import authenticate_user, require_admin, require_user
+from app.auth import authenticate_user, check_admin_session, check_user_session, login_redirect
+from app.config import CANONICAL_HOST, IS_VERCEL, get_session_secret
 from app.services import (
     REPORT_CONFIRMED,
     REPORT_SUBMITTED,
@@ -46,22 +45,20 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 app = FastAPI(title="BetPro", version="1.0.0")
 
-_secret = os.getenv("BETPRO_SECRET")
-if not _secret:
-    _secret = secrets.token_hex(32)
-
-CANONICAL_HOST = os.getenv("BETPRO_CANONICAL_HOST", "www.betpro.management").strip()
-
 app.add_middleware(
     SessionMiddleware,
-    secret_key=_secret,
+    secret_key=get_session_secret(),
+    same_site="lax",
+    https_only=IS_VERCEL,
+    max_age=60 * 60 * 24 * 14,
+    session_cookie="betpro_session",
 )
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 @app.middleware("http")
 async def redirect_vercel_domain(request: Request, call_next):
-    if CANONICAL_HOST:
+    if CANONICAL_HOST and request.method in ("GET", "HEAD"):
         host = request.headers.get("host", "").split(":")[0].lower()
         if host.endswith(".vercel.app") and host != CANONICAL_HOST:
             target = request.url.replace(scheme="https", netloc=CANONICAL_HOST)
@@ -109,7 +106,7 @@ def report_context(report: dict) -> dict:
 
 
 def redirect_login() -> RedirectResponse:
-    return RedirectResponse(U.ACCESO, status_code=303)
+    return login_redirect()
 
 
 def redirect_home(user: dict) -> RedirectResponse:
@@ -168,10 +165,9 @@ async def logout(request: Request):
 
 @app.get(U.MIS_REPORTES, response_class=HTMLResponse)
 async def worker_panel(request: Request, fecha: str | None = None):
-    try:
-        user = require_user(request)
-    except Exception:
-        return redirect_login()
+    user, auth_redirect = check_user_session(request)
+    if auth_redirect:
+        return auth_redirect
 
     if user["role"] == "admin":
         return RedirectResponse(U.REPORTES, status_code=303)
@@ -207,10 +203,9 @@ async def worker_save_report(
     retiro_amount: list[str] = Form(default=[]),
     notes: str = Form(""),
 ):
-    try:
-        user = require_user(request)
-    except Exception:
-        return redirect_login()
+    user, auth_redirect = check_user_session(request)
+    if auth_redirect:
+        return auth_redirect
 
     report = get_or_create_report(user["id"], report_date)
     try:
@@ -245,10 +240,9 @@ async def worker_save_report(
 
 @app.get(U.REPORTES, response_class=HTMLResponse)
 async def admin_dashboard(request: Request, period: str = "all"):
-    try:
-        user = require_admin(request)
-    except Exception:
-        return redirect_login()
+    user, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
 
     if period not in ("all", "today", "week", "month"):
         period = "all"
@@ -272,10 +266,9 @@ async def admin_dashboard(request: Request, period: str = "all"):
 
 @app.get(U.CLIENTES, response_class=HTMLResponse)
 async def admin_clients(request: Request):
-    try:
-        user = require_admin(request)
-    except Exception:
-        return redirect_login()
+    user, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
 
     workers = list_workers()
     pending = list_pending_reports()
@@ -303,22 +296,23 @@ async def admin_create_worker(
     name: str = Form(...),
     retiro_fee: str = Form("50"),
 ):
+    _, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
     try:
-        require_admin(request)
         if password != password_confirm:
             raise ValueError("Las contraseñas no coinciden")
         create_worker(username, password, name, parse_amount(retiro_fee))
-    except Exception as exc:
+    except ValueError as exc:
         return RedirectResponse(with_query(U.CLIENTES, error=str(exc)), status_code=303)
     return RedirectResponse(with_query(U.CLIENTES, msg="Cliente creado"), status_code=303)
 
 
 @app.get(U.ADMINISTRADORES, response_class=HTMLResponse)
 async def admin_users_page(request: Request):
-    try:
-        user = require_admin(request)
-    except Exception:
-        return redirect_login()
+    user, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
 
     return templates.TemplateResponse(
         "admin_admins.html",
@@ -340,12 +334,14 @@ async def admin_create_admin(
     password_confirm: str = Form(...),
     name: str = Form(...),
 ):
+    _, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
     try:
-        require_admin(request)
         if password != password_confirm:
             raise ValueError("Las contraseñas no coinciden")
         create_admin(username, password, name)
-    except Exception as exc:
+    except ValueError as exc:
         return RedirectResponse(
             with_query(U.ADMINISTRADORES, error=str(exc)),
             status_code=303,
@@ -358,10 +354,12 @@ async def admin_create_admin(
 
 @app.post("/administradores/{admin_id}/estado")
 async def admin_toggle_admin(request: Request, admin_id: int, active: str = Form(...)):
+    actor, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
     try:
-        actor = require_admin(request)
         update_admin_status(admin_id, active == "1", actor["id"])
-    except Exception as exc:
+    except ValueError as exc:
         return RedirectResponse(
             with_query(U.ADMINISTRADORES, error=str(exc)),
             status_code=303,
@@ -378,30 +376,33 @@ async def admin_update_fee(
     worker_id: int,
     retiro_fee: str = Form(...),
 ):
+    _, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
     try:
-        require_admin(request)
         update_worker_fee(worker_id, parse_amount(retiro_fee))
-    except Exception as exc:
+    except ValueError as exc:
         return RedirectResponse(with_query(U.CLIENTES, error=str(exc)), status_code=303)
     return RedirectResponse(with_query(U.CLIENTES, msg="Tarifa actualizada"), status_code=303)
 
 
 @app.post("/clientes/{worker_id}/estado")
 async def admin_toggle_worker(request: Request, worker_id: int, active: str = Form(...)):
+    _, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
     try:
-        require_admin(request)
         update_worker_status(worker_id, active == "1")
-    except Exception as exc:
+    except ValueError as exc:
         return RedirectResponse(with_query(U.CLIENTES, error=str(exc)), status_code=303)
     return RedirectResponse(with_query(U.CLIENTES, msg="Estado actualizado"), status_code=303)
 
 
 @app.get("/clientes/{worker_id}", response_class=HTMLResponse)
 async def admin_worker_detail(request: Request, worker_id: int, fecha: str | None = None):
-    try:
-        user = require_admin(request)
-    except Exception:
-        return redirect_login()
+    user, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
 
     from app.auth import get_user_by_id
 
@@ -445,10 +446,9 @@ async def admin_save_discounts(
     discount_desc: list[str] = Form(default=[]),
     discount_amount: list[str] = Form(default=[]),
 ):
-    try:
-        require_admin(request)
-    except Exception:
-        return redirect_login()
+    _, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
 
     report = get_or_create_report(worker_id, report_date)
     try:
@@ -473,10 +473,9 @@ async def admin_confirm_report(
     discount_desc: list[str] = Form(default=[]),
     discount_amount: list[str] = Form(default=[]),
 ):
-    try:
-        admin = require_admin(request)
-    except Exception:
-        return redirect_login()
+    admin, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
 
     report = get_or_create_report(worker_id, report_date)
     try:
@@ -513,10 +512,9 @@ async def admin_reopen_report(
     worker_id: int,
     report_date: str = Form(...),
 ):
-    try:
-        require_admin(request)
-    except Exception:
-        return redirect_login()
+    _, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
 
     report = get_or_create_report(worker_id, report_date)
     if not reopen_report(report["id"]):
@@ -547,10 +545,9 @@ async def admin_save_entries(
     cargue_amount: list[str] = Form(default=[]),
     retiro_amount: list[str] = Form(default=[]),
 ):
-    try:
-        require_admin(request)
-    except Exception:
-        return redirect_login()
+    _, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
 
     report = get_or_create_report(worker_id, report_date)
     try:

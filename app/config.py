@@ -1,9 +1,12 @@
+import hashlib
 import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 IS_VERCEL = os.getenv("VERCEL") == "1"
+
+CANONICAL_HOST = os.getenv("BETPRO_CANONICAL_HOST", "www.betpro.management").strip()
 
 TURSO_DATABASE_URL = os.getenv("TURSO_DATABASE_URL", "").strip()
 TURSO_AUTH_TOKEN = os.getenv("TURSO_AUTH_TOKEN", "").strip()
@@ -19,3 +22,23 @@ BACKUP_DIR = BASE_DIR / "backups"
 ADMIN_USERNAME = os.getenv("BETPRO_ADMIN_USER", "nosorio")
 ADMIN_PASSWORD = os.getenv("BETPRO_ADMIN_PASSWORD", "Nosorio2026!")
 ADMIN_NAME = os.getenv("BETPRO_ADMIN_NAME", "Nicolas Osorio")
+
+
+def get_session_secret() -> str:
+    """Clave estable para firmar sesiones (crítico en Vercel serverless)."""
+    secret = os.getenv("BETPRO_SECRET", "").strip()
+    if secret:
+        return secret
+
+    if IS_VERCEL:
+        for source in (
+            TURSO_AUTH_TOKEN,
+            os.getenv("VERCEL_PROJECT_ID", "").strip(),
+            "betpro-vercel-default",
+        ):
+            if source:
+                return hashlib.sha256(f"betpro-session:{source}".encode()).hexdigest()
+
+    import secrets
+
+    return secrets.token_hex(32)
