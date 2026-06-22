@@ -37,5 +37,8 @@
 </head>
 <body class="min-h-screen text-slate-100 font-sans antialiased">
   {% block body %}{% endblock %}
+  {% if app_version %}
+  <p class="app-version">BetPro v{{ app_version }}</p>
+  {% endif %}
 </body>
 </html>

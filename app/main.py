@@ -13,7 +13,7 @@ from starlette.requests import Request as StarletteRequest
 
 from app import urls as U
 from app.auth import authenticate_user, check_admin_session, check_user_session, login_redirect
-from app.config import CANONICAL_HOST, IS_VERCEL, get_session_secret
+from app.config import CANONICAL_HOST, IS_VERCEL, get_session_secret, APP_VERSION
 from app.services import (
     REPORT_CONFIRMED,
     REPORT_SUBMITTED,
@@ -133,6 +133,7 @@ def fmt_money(value: float) -> str:
 templates.env.filters["money"] = fmt_money
 templates.env.filters["tojson"] = lambda v: json.dumps(v)
 templates.env.globals["url"] = U
+templates.env.globals["app_version"] = APP_VERSION
 
 
 def build_cargues_items(report: dict) -> list[dict]:
