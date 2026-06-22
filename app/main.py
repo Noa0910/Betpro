@@ -60,10 +60,12 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 @app.middleware("http")
-async def redirect_vercel_domain(request: Request, call_next):
+async def redirect_canonical_host(request: Request, call_next):
     if CANONICAL_HOST and request.method in ("GET", "HEAD"):
         host = request.headers.get("host", "").split(":")[0].lower()
-        if host.endswith(".vercel.app") and host != CANONICAL_HOST:
+        if host != CANONICAL_HOST and (
+            host.endswith(".vercel.app") or host == "betpro.management"
+        ):
             target = request.url.replace(scheme="https", netloc=CANONICAL_HOST)
             return RedirectResponse(str(target), status_code=301)
     return await call_next(request)
@@ -229,6 +231,15 @@ async def worker_panel(request: Request, fecha: str | None = None):
     report_date = fecha or today_iso()
     report = get_or_create_report(user["id"], report_date)
     details = get_report_details(report["id"])
+    if not details:
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "message": "No se pudo cargar el reporte. Recarga la página o contacta al admin.",
+            },
+            status_code=500,
+        )
     history = get_user_reports(user["id"], limit=15)
     cumulative = get_cumulative_total(user["id"])
     ctx = report_context(details)

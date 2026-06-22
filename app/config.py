@@ -8,7 +8,7 @@ IS_VERCEL = os.getenv("VERCEL") == "1"
 
 CANONICAL_HOST = os.getenv("BETPRO_CANONICAL_HOST", "www.betpro.management").strip()
 
-APP_VERSION = "2026.06.22-2"
+APP_VERSION = "2026.06.22-3"
 
 TURSO_DATABASE_URL = os.getenv("TURSO_DATABASE_URL", "").strip()
 TURSO_AUTH_TOKEN = os.getenv("TURSO_AUTH_TOKEN", "").strip()

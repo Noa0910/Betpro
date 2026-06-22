@@ -148,21 +148,22 @@ def _load_report_children(conn, report_ids: list[int]) -> tuple[dict, dict, dict
     retiros_map: dict[int, list] = {rid: [] for rid in report_ids}
     discounts_map: dict[int, list] = {rid: [] for rid in report_ids}
 
+    params = tuple(report_ids)
     for row in conn.execute(
         f"SELECT id, report_id, amount FROM cargues WHERE report_id IN ({placeholders}) ORDER BY id",
-        report_ids,
+        params,
     ).fetchall():
         cargues_map[row["report_id"]].append({"id": row["id"], "amount": row["amount"]})
 
     for row in conn.execute(
         f"SELECT id, report_id, amount FROM retiros WHERE report_id IN ({placeholders}) ORDER BY id",
-        report_ids,
+        params,
     ).fetchall():
         retiros_map[row["report_id"]].append({"id": row["id"], "amount": row["amount"]})
 
     for row in conn.execute(
         f"SELECT id, report_id, description, amount FROM discounts WHERE report_id IN ({placeholders}) ORDER BY id",
-        report_ids,
+        params,
     ).fetchall():
         discounts_map[row["report_id"]].append(
             {"id": row["id"], "description": row["description"], "amount": row["amount"]}
@@ -199,7 +200,7 @@ def get_cumulative_totals_batch(user_ids: list[int]) -> dict[int, float]:
             WHERE dr.user_id IN ({placeholders}) AND dr.status = 'confirmed'
             ORDER BY dr.user_id, dr.report_date
             """,
-            user_ids,
+            tuple(user_ids),
         ).fetchall()
         if not rows:
             return totals
