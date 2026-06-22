@@ -147,7 +147,7 @@ turso db tokens create betpro
 
 5. **Redeploy** el proyecto (Deployments → ⋯ → Redeploy).
 
-6. Abre `https://www.betpro.management/login` — usuario `nosorio` y la contraseña en `BETPRO_ADMIN_PASSWORD`.
+6. Abre `https://www.betpro.management/acceso` — usuario `nosorio` y la contraseña en `BETPRO_ADMIN_PASSWORD`.
 
 Turso es SQLite en la nube: mismo motor, datos permanentes, plan gratis suficiente para uso interno.
 

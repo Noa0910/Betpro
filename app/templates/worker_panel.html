@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% import "components.html" as ui %}
-{% block title %}Mi Panel - BetPro{% endblock %}
+{% block title %}Mis reportes - BetPro{% endblock %}
 {% block body %}
 <header class="app-header sticky top-0 z-10">
   <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -8,7 +8,7 @@
       <h1 class="text-xl font-bold">BetPro</h1>
       <p class="text-sm text-gray-400">Hola, {{ user.name }}</p>
     </div>
-    <a href="/logout" class="text-sm text-gray-400 hover:text-white">Salir</a>
+    <a href="{{ url.SALIR }}" class="text-sm text-gray-400 hover:text-white">Salir</a>
   </div>
 </header>
 
@@ -29,7 +29,7 @@
     </div>
     <div class="flex items-center gap-3">
       {{ ui.report_status_badge(report) }}
-      <form method="get" action="/panel" class="flex items-center gap-2">
+      <form method="get" action="{{ url.MIS_REPORTES }}" class="flex items-center gap-2">
         <label class="text-sm text-gray-400">Fecha:</label>
         <input type="date" name="fecha" value="{{ report_date }}" onchange="this.form.submit()"
           class="px-3 py-2 rounded-lg bg-black/40 border border-white/10">
@@ -49,7 +49,7 @@
   {% endif %}
 
   {% if report.client_can_edit %}
-  <form method="post" action="/panel/guardar" class="space-y-6">
+  <form method="post" action="{{ url.mis_reportes_guardar() }}" class="space-y-6">
     <input type="hidden" name="report_date" value="{{ report_date }}">
 
     <div class="grid md:grid-cols-2 gap-6">

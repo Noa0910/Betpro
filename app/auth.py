@@ -52,7 +52,7 @@ def require_user(request: Request) -> dict:
     if not user:
         raise HTTPException(
             status_code=status.HTTP_303_SEE_OTHER,
-            headers={"Location": "/login"},
+            headers={"Location": "/acceso"},
         )
     return user
 

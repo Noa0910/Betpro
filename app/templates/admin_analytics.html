@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% import "components.html" as ui %}
-{% block title %}Dashboard - BetPro Admin{% endblock %}
+{% block title %}Reportes - BetPro{% endblock %}
 {% block body %}
 <header class="app-header sticky top-0 z-10">
   <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -8,8 +8,8 @@
       <h1 class="text-xl font-bold">BetPro Admin</h1>
       <p class="text-sm text-gray-400">{{ user.name }}</p>
     </div>
-    {{ ui.admin_nav('dashboard') }}
-    <a href="/logout" class="text-sm text-gray-400 hover:text-white sm:ml-auto">Salir</a>
+    {{ ui.admin_nav('reportes') }}
+    <a href="{{ url.SALIR }}" class="text-sm text-gray-400 hover:text-white sm:ml-auto">Salir</a>
   </div>
 </header>
 
@@ -28,7 +28,7 @@
     </div>
     <div class="flex flex-wrap gap-2">
       {% for p, label in [('all', 'Todo'), ('today', 'Hoy'), ('week', '7 días'), ('month', 'Mes')] %}
-      <a href="/admin?period={{ p }}"
+      <a href="{{ url.REPORTES }}?period={{ p }}"
         class="period-filter {% if period == p %}active{% endif %}">{{ label }}</a>
       {% endfor %}
     </div>
@@ -100,7 +100,7 @@
             <td class="py-3 pr-4">{{ p.summary.total_retiros | money }}</td>
             <td class="py-3 pr-4 text-betpro-400">{{ p.summary.preview_total | money }}</td>
             <td class="py-3">
-              <a href="/admin/clientes/{{ p.user_id }}?fecha={{ p.report_date }}" class="text-betpro-400 hover:underline">Revisar →</a>
+              <a href="{{ url.cliente(p.user_id) }}?fecha={{ p.report_date }}" class="text-betpro-400 hover:underline">Revisar →</a>
             </td>
           </tr>
           {% endfor %}
@@ -180,7 +180,7 @@
               {% else %}—{% endif %}
             </td>
             <td class="py-4">
-              <a href="/admin/clientes/{{ c.user_id }}" class="text-betpro-400 hover:underline">Ver →</a>
+              <a href="{{ url.cliente(c.user_id) }}" class="text-betpro-400 hover:underline">Ver →</a>
             </td>
           </tr>
           {% else %}

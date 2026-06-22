@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Iniciar sesión - BetPro{% endblock %}
+{% block title %}Acceso - BetPro{% endblock %}
 {% block body %}
 <div class="login-page min-h-screen flex items-center justify-center p-4">
   <div class="w-full max-w-md">
@@ -11,7 +11,7 @@
       <p class="text-slate-400 mt-2 text-sm uppercase tracking-widest">Trading Deportivo</p>
     </div>
 
-    <form method="post" action="/login" class="login-card rounded-2xl p-8 shadow-2xl">
+    <form method="post" action="{{ url.ACCESO }}" class="login-card rounded-2xl p-8 shadow-2xl">
       {% if error %}
       <div class="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm">
         {{ error }}

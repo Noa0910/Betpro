@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 {% import "components.html" as ui %}
-{% block title %}{{ worker.name }} - BetPro Admin{% endblock %}
+{% block title %}Reportes de {{ worker.name }} - BetPro{% endblock %}
 {% block body %}
 <header class="app-header sticky top-0 z-10">
   <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
     <div>
-      <a href="/admin/clientes" class="text-sm text-gray-400 hover:text-white">← Clientes</a>
+      <a href="{{ url.CLIENTES }}" class="text-sm text-gray-400 hover:text-white">← Clientes</a>
       <h1 class="text-xl font-bold mt-1">{{ worker.name }}</h1>
       <p class="text-sm text-gray-400">@{{ worker.username }} · Tarifa retiro: {{ worker.retiro_fee | money }}</p>
     </div>
     {{ ui.admin_nav('clientes') }}
-    <a href="/logout" class="text-sm text-gray-400 hover:text-white">Salir</a>
+    <a href="{{ url.SALIR }}" class="text-sm text-gray-400 hover:text-white">Salir</a>
   </div>
 </header>
 
@@ -32,14 +32,14 @@
     <div class="flex items-center gap-3 flex-wrap">
       {{ ui.report_status_badge(report) }}
       {% if can_reopen %}
-      <form method="post" action="/admin/clientes/{{ worker.id }}/reabrir">
+      <form method="post" action="{{ url.cliente_reabrir(worker.id) }}">
         <input type="hidden" name="report_date" value="{{ report_date }}">
         <button type="submit" class="btn-secondary" onclick="return confirm('¿Habilitar edición al cliente? Podrá modificar cargues y retiros y volver a enviar.')">
           Habilitar edición al cliente
         </button>
       </form>
       {% endif %}
-      <form method="get" action="/admin/clientes/{{ worker.id }}" class="flex items-center gap-2">
+      <form method="get" action="{{ url.cliente(worker.id) }}" class="flex items-center gap-2">
         <label class="text-sm text-gray-400">Fecha:</label>
         <input type="date" name="fecha" value="{{ report_date }}" onchange="this.form.submit()"
           class="px-3 py-2 rounded-lg bg-black/40 border border-white/10">
@@ -48,7 +48,7 @@
   </div>
 
   {% if admin_can_edit %}
-  <form method="post" action="/admin/clientes/{{ worker.id }}/guardar-datos" class="space-y-6">
+  <form method="post" action="{{ url.cliente_guardar(worker.id) }}" class="space-y-6">
     <input type="hidden" name="report_date" value="{{ report_date }}">
     <div class="p-4 rounded-xl alert-info text-sm mb-2">
       Reporte enviado por el cliente. Solo tú puedes modificar cargues y retiros.
@@ -67,7 +67,7 @@
   </div>
   {% endif %}
 
-  <form method="post" action="/admin/clientes/{{ worker.id }}/confirmar-reporte" class="space-y-6 mt-6"
+  <form method="post" action="{{ url.cliente_confirmar(worker.id) }}" class="space-y-6 mt-6"
     onsubmit="return confirmReporte()">
     <input type="hidden" name="report_date" value="{{ report_date }}">
     {{ ui.discount_widget_admin(discount_items) }}
