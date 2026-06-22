@@ -3,11 +3,19 @@ name: Deploy BetPro
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   trigger-vercel:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Vercel deploy hook
-        if: ${{ secrets.VERCEL_DEPLOY_HOOK != '' }}
-        run: curl -fsS -X POST "${{ secrets.VERCEL_DEPLOY_HOOK }}"
+        env:
+          DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$DEPLOY_HOOK" ]; then
+            echo "VERCEL_DEPLOY_HOOK no configurado."
+            echo "Vercel debe desplegar automaticamente si el repo esta conectado en vercel.com."
+            exit 0
+          fi
+          curl -fsS -X POST "$DEPLOY_HOOK"
