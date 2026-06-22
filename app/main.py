@@ -12,7 +12,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request as StarletteRequest
 
 from app import urls as U
-from app.auth import authenticate_user, check_admin_session, check_user_session, login_redirect
+from app.auth import authenticate_user, check_admin_session, check_user_session, get_user_by_username, login_redirect, verify_password
 from app.config import CANONICAL_HOST, DB_EPHEMERAL, IS_VERCEL, USE_TURSO, get_session_secret, APP_VERSION
 from app.services import (
     REPORT_CONFIRMED,
@@ -281,6 +281,22 @@ async def root(request: Request):
     return redirect_home(user)
 
 
+def login_error_message(username: str, password: str) -> str:
+    user = get_user_by_username(username)
+    if not user:
+        if DB_EPHEMERAL:
+            return (
+                "Usuario no encontrado. En Vercel sin Turso la base se reinicia y "
+                "los clientes creados se pierden. Configura Turso y vuelve a crear el cliente."
+            )
+        return "Usuario no encontrado. Verifica el nombre o pide al admin que te cree la cuenta."
+    if not int(user.get("active") or 0):
+        return "Tu cuenta está desactivada. Contacta al administrador."
+    if not verify_password(password, user["password_hash"]):
+        return "Contraseña incorrecta."
+    return "No se pudo iniciar sesión."
+
+
 @app.get(U.ACCESO, response_class=HTMLResponse)
 async def login_page(request: Request):
     if request.session.get("user"):
@@ -301,7 +317,7 @@ async def login_submit(
     if not user:
         return templates.TemplateResponse(
             "login.html",
-            {"request": request, "error": "Usuario o contraseña incorrectos"},
+            {"request": request, "error": login_error_message(username, password)},
             status_code=400,
         )
     request.session["user"] = user
@@ -456,13 +472,18 @@ async def admin_create_worker(
     _, auth_redirect = check_admin_session(request)
     if auth_redirect:
         return auth_redirect
+    username_clean = username.strip().lower()
     try:
         if password != password_confirm:
             raise ValueError("Las contraseñas no coinciden")
-        create_worker(username, password, name, parse_amount(retiro_fee))
+        create_worker(username_clean, password, name, parse_amount(retiro_fee))
     except ValueError as exc:
         return RedirectResponse(with_query(U.CLIENTES, error=str(exc)), status_code=303)
-    return RedirectResponse(with_query(U.CLIENTES, msg="Cliente creado"), status_code=303)
+
+    msg = f"Cliente creado: {username_clean}"
+    if DB_EPHEMERAL:
+        msg += " — URGENTE: configure Turso en Vercel o se perderá al reiniciar."
+    return RedirectResponse(with_query(U.CLIENTES, msg=msg), status_code=303)
 
 
 @app.get(U.ADMINISTRADORES, response_class=HTMLResponse)

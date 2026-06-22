@@ -26,7 +26,7 @@ IS_VERCEL = os.getenv("VERCEL") == "1"
 
 CANONICAL_HOST = os.getenv("BETPRO_CANONICAL_HOST", "www.betpro.management").strip()
 
-APP_VERSION = "2026.06.22-10"
+APP_VERSION = "2026.06.22-11"
 
 
 def _normalize_turso_url(url: str) -> str:
