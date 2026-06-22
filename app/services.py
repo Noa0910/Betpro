@@ -361,6 +361,19 @@ def list_workers() -> list[dict]:
         return workers
 
 
+def create_admin(username: str, password: str, name: str) -> None:
+    from app.auth import hash_password
+
+    with db_session() as conn:
+        conn.execute(
+            """
+            INSERT INTO users (username, password_hash, name, role, retiro_fee)
+            VALUES (?, ?, ?, 'admin', 0)
+            """,
+            (username.strip().lower(), hash_password(password), name.strip()),
+        )
+
+
 def create_worker(username: str, password: str, name: str, retiro_fee: float) -> None:
     from app.auth import hash_password
 
