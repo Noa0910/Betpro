@@ -1,8 +1,8 @@
-"""Resetea la base de datos y deja solo el usuario admin inicial."""
+"""Resetea la base de datos y deja los admins iniciales."""
 from pathlib import Path
 
-from app.bootstrap import seed_admin
-from app.config import ADMIN_NAME, ADMIN_PASSWORD, ADMIN_USERNAME, DB_PATH, USE_TURSO
+from app.bootstrap import DEFAULT_ADMINS, seed_admin
+from app.config import DB_PATH, USE_TURSO
 from app.database import db_session, init_db
 
 
@@ -26,8 +26,9 @@ def reset_db() -> None:
     init_db()
     seed_admin()
     print("Base de datos limpia.")
-    print(f"  Admin: {ADMIN_USERNAME} / {ADMIN_PASSWORD}")
-    print(f"  Nombre: {ADMIN_NAME}")
+    print("Administradores:")
+    for username, password, name in DEFAULT_ADMINS:
+        print(f"  - {username} / {password} ({name})")
 
 
 if __name__ == "__main__":

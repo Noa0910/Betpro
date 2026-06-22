@@ -46,7 +46,22 @@ def _as_float(value) -> float:
     return float(value)
 
 
+def today_iso() -> str:
+    return date.today().isoformat()
+
+
+def parse_report_date(value: str | None) -> str:
+    if not value:
+        return today_iso()
+    try:
+        date.fromisoformat(value.strip())
+        return value.strip()
+    except ValueError:
+        return today_iso()
+
+
 def get_or_create_report(user_id: int, report_date: str) -> dict:
+    report_date = parse_report_date(report_date)
     with db_session() as conn:
         row = conn.execute(
             """
@@ -59,19 +74,33 @@ def get_or_create_report(user_id: int, report_date: str) -> dict:
         if row:
             return dict(row)
 
-        cursor = conn.execute(
-            """
-            INSERT INTO daily_reports (user_id, report_date, status)
-            VALUES (?, ?, 'draft')
-            """,
-            (user_id, report_date),
-        )
+        try:
+            cursor = conn.execute(
+                """
+                INSERT INTO daily_reports (user_id, report_date, status)
+                VALUES (?, ?, 'draft')
+                """,
+                (user_id, report_date),
+            )
+        except Exception:
+            row = conn.execute(
+                """
+                SELECT id, user_id, report_date, status, notes, submitted_at, confirmed_at
+                FROM daily_reports
+                WHERE user_id = ? AND report_date = ?
+                """,
+                (user_id, report_date),
+            ).fetchone()
+            if row:
+                return dict(row)
+            raise
+
         new_id = cursor.lastrowid
         if not new_id:
             new_id = conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
         return {
-            "id": new_id,
-            "user_id": user_id,
+            "id": _as_int(new_id),
+            "user_id": _as_int(user_id),
             "report_date": report_date,
             "status": REPORT_DRAFT,
             "notes": None,
@@ -438,7 +467,7 @@ def list_pending_reports(limit: int = 20) -> list[dict]:
         results = []
         for row in rows:
             item = dict(row)
-            details = get_report_details(row["id"])
+            details = get_report_details(_as_int(row["id"]))
             item["summary"] = details["summary"] if details else dict(EMPTY_SUMMARY)
             results.append(item)
         return results
@@ -455,7 +484,7 @@ def count_pending_reports(user_id: int | None = None) -> int:
             row = conn.execute(
                 "SELECT COUNT(*) AS c FROM daily_reports WHERE status = 'submitted'"
             ).fetchone()
-        return row["c"] if row else 0
+        return _as_int(row["c"]) if row else 0
 
 
 def list_workers() -> list[dict]:
@@ -473,8 +502,10 @@ def list_workers() -> list[dict]:
         cumulative_map = get_cumulative_totals_batch(user_ids)
         for row in rows:
             worker = dict(row)
-            worker["cumulative_total"] = cumulative_map.get(worker["id"], 0.0)
-            worker["pending_reports"] = count_pending_reports(worker["id"])
+            wid = _as_int(worker["id"])
+            worker["id"] = wid
+            worker["cumulative_total"] = cumulative_map.get(wid, 0.0)
+            worker["pending_reports"] = count_pending_reports(wid)
             workers.append(worker)
         return workers
 
@@ -574,10 +605,6 @@ def update_worker_status(worker_id: int, active: bool) -> None:
             "UPDATE users SET active = ? WHERE id = ? AND role = 'worker'",
             (1 if active else 0, worker_id),
         )
-
-
-def today_iso() -> str:
-    return date.today().isoformat()
 
 
 def _period_range(period: str) -> tuple[str | None, str | None]:

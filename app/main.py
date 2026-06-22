@@ -13,7 +13,7 @@ from starlette.requests import Request as StarletteRequest
 
 from app import urls as U
 from app.auth import authenticate_user, check_admin_session, check_user_session, login_redirect
-from app.config import CANONICAL_HOST, IS_VERCEL, get_session_secret, APP_VERSION
+from app.config import CANONICAL_HOST, IS_VERCEL, USE_TURSO, get_session_secret, APP_VERSION
 from app.services import (
     REPORT_CONFIRMED,
     REPORT_SUBMITTED,
@@ -34,6 +34,7 @@ from app.services import (
     save_admin_entries,
     save_client_report,
     save_discounts,
+    parse_report_date,
     today_iso,
     update_worker_fee,
     update_worker_status,
@@ -75,6 +76,11 @@ async def redirect_canonical_host(request: Request, call_next):
 def startup() -> None:
     from app.bootstrap import seed_if_empty
 
+    if IS_VERCEL and not USE_TURSO:
+        print(
+            "ADVERTENCIA: Turso no configurado en Vercel. "
+            "Configura TURSO_DATABASE_URL y TURSO_AUTH_TOKEN."
+        )
     seed_if_empty()
 
 
@@ -230,7 +236,7 @@ async def worker_panel(request: Request, fecha: str | None = None):
     if user["role"] == "admin":
         return RedirectResponse(U.REPORTES, status_code=303)
 
-    report_date = fecha or today_iso()
+    report_date = parse_report_date(fecha)
     report = get_or_create_report(user["id"], report_date)
     details = get_report_details(report["id"])
     if not details:
@@ -279,6 +285,15 @@ async def worker_save_report(
         save_client_report(report["id"], cargue_amount, retiro_amount, notes)
     except ValueError as exc:
         details = get_report_details(report["id"])
+        if not details:
+            return templates.TemplateResponse(
+                "error.html",
+                {
+                    "request": request,
+                    "message": "No se pudo cargar el reporte tras guardar.",
+                },
+                status_code=500,
+            )
         ctx = report_context(details)
         return templates.TemplateResponse(
             "worker_panel.html",
@@ -317,9 +332,9 @@ async def admin_dashboard(request: Request, period: str = "all"):
     try:
         analytics = get_admin_analytics(period)
         pending = list_pending_reports()
-    except Exception as exc:
+    except Exception:
         return RedirectResponse(
-            with_query(U.REPORTES, error=f"No se pudo cargar el dashboard: {exc}"),
+            with_query(U.REPORTES, error="No se pudo cargar el dashboard. Intenta de nuevo."),
             status_code=303,
         )
 
@@ -346,9 +361,9 @@ async def admin_clients(request: Request):
     try:
         workers = list_workers()
         pending = list_pending_reports()
-    except Exception as exc:
+    except Exception:
         return RedirectResponse(
-            with_query(U.CLIENTES, error=f"No se pudo cargar clientes: {exc}"),
+            with_query(U.CLIENTES, error="No se pudo cargar clientes. Intenta de nuevo."),
             status_code=303,
         )
 
@@ -489,9 +504,18 @@ async def admin_worker_detail(request: Request, worker_id: int, fecha: str | Non
     if not worker or worker["role"] != "worker":
         return RedirectResponse(U.REPORTES, status_code=303)
 
-    report_date = fecha or today_iso()
+    report_date = parse_report_date(fecha)
     report = get_or_create_report(worker_id, report_date)
     details = get_report_details(report["id"])
+    if not details:
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "message": "No se pudo cargar el reporte del cliente.",
+            },
+            status_code=500,
+        )
     history = get_user_reports(worker_id, limit=30)
     cumulative = get_cumulative_total(worker_id)
     ctx = report_context(details)
@@ -557,6 +581,17 @@ async def admin_confirm_report(
         return auth_redirect
 
     report = get_or_create_report(worker_id, report_date)
+    details = get_report_details(report["id"])
+    if not details or details["status"] != REPORT_SUBMITTED:
+        return RedirectResponse(
+            with_query(
+                U.cliente(worker_id),
+                fecha=report_date,
+                error="No se pudo confirmar. El cliente debe enviar el reporte primero.",
+            ),
+            status_code=303,
+        )
+
     try:
         if discount_desc or discount_amount:
             save_discounts(report["id"], discount_desc, discount_amount)
@@ -565,7 +600,7 @@ async def admin_confirm_report(
                 with_query(
                     U.cliente(worker_id),
                     fecha=report_date,
-                    error="No se pudo confirmar. El cliente debe enviar el reporte primero.",
+                    error="No se pudo confirmar el reporte.",
                 ),
                 status_code=303,
             )

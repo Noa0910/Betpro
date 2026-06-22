@@ -13,7 +13,10 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False
 
 
 def get_user_by_id(user_id: int) -> Optional[dict]:
@@ -34,36 +37,55 @@ def get_user_by_username(username: str) -> Optional[dict]:
         return dict(row) if row else None
 
 
+def session_user_payload(user: dict) -> dict:
+    return {
+        "id": int(user["id"]),
+        "username": user["username"],
+        "name": user["name"],
+        "role": user["role"],
+        "retiro_fee": float(user.get("retiro_fee") or 0),
+    }
+
+
 def authenticate_user(username: str, password: str) -> Optional[dict]:
     user = get_user_by_username(username)
     if not user or not user["active"]:
         return None
     if not verify_password(password, user["password_hash"]):
         return None
-    return {
-        "id": user["id"],
-        "username": user["username"],
-        "name": user["name"],
-        "role": user["role"],
-        "retiro_fee": user["retiro_fee"],
-    }
+    return session_user_payload(user)
 
 
 def login_redirect() -> RedirectResponse:
     return RedirectResponse(U.ACCESO, status_code=303)
 
 
-def check_user_session(request: Request) -> tuple[Optional[dict], Optional[RedirectResponse]]:
-    user = request.session.get("user")
-    if not user:
+def _refresh_session_user(request: Request) -> tuple[Optional[dict], Optional[RedirectResponse]]:
+    stored = request.session.get("user")
+    if not stored:
         return None, login_redirect()
+
+    fresh = get_user_by_id(int(stored["id"]))
+    if not fresh or not fresh["active"]:
+        request.session.clear()
+        return None, login_redirect()
+
+    user = session_user_payload(fresh)
+    request.session["user"] = user
+    return user, None
+
+
+def check_user_session(request: Request) -> tuple[Optional[dict], Optional[RedirectResponse]]:
+    user, redirect = _refresh_session_user(request)
+    if redirect:
+        return None, redirect
     return user, None
 
 
 def check_admin_session(request: Request) -> tuple[Optional[dict], Optional[RedirectResponse]]:
-    user = request.session.get("user")
-    if not user:
-        return None, login_redirect()
+    user, redirect = _refresh_session_user(request)
+    if redirect:
+        return None, redirect
     if user["role"] != "admin":
         return None, RedirectResponse(U.MIS_REPORTES, status_code=303)
     return user, None

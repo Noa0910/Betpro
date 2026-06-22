@@ -77,7 +77,7 @@
 {% macro amount_widget(title, hint, amount_name, items, locked=false) %}
 <div class="card" data-amount-widget
      data-amount-name="{{ amount_name }}"
-     data-initial='{{ items | tojson }}'
+     data-initial="{{ items | tojson | forceescape }}"
      {% if locked %}data-locked="true"{% endif %}>
   <div class="amount-widget-header">
     <div>
@@ -114,7 +114,7 @@
 {% endmacro %}
 
 {% macro discount_widget_admin(discounts, locked=false) %}
-<div class="card" data-discount-widget data-initial='{{ discounts | tojson }}' {% if locked %}data-locked="true"{% endif %}>
+<div class="card" data-discount-widget data-initial="{{ discounts | tojson | forceescape }}" {% if locked %}data-locked="true"{% endif %}>
   <div class="amount-widget-header">
     <div>
       <h3 class="card-title">Extras / Descuentos</h3>

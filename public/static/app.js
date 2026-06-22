@@ -67,6 +67,14 @@ function initAmountList(container, options = {}) {
   updateTotal();
 }
 
+function escapeAttr(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/</g, "&lt;");
+}
+
 function initDiscountList(container) {
   const locked = container.dataset.locked === "true";
   const list = container.querySelector("[data-discount-list]");
@@ -76,8 +84,8 @@ function initDiscountList(container) {
     const row = document.createElement("div");
     row.className = "discount-row";
     row.innerHTML = `
-      <input type="text" name="discount_desc" placeholder="Ej: Cuenta, Código" class="input-field" value="${desc}" ${locked ? "readonly" : ""}>
-      <input type="number" step="0.01" min="0" name="discount_amount" placeholder="0.00" class="input-field" value="${amount}" ${locked ? "readonly" : ""}>
+      <input type="text" name="discount_desc" placeholder="Ej: Cuenta, Código" class="input-field" value="${escapeAttr(desc)}" ${locked ? "readonly" : ""}>
+      <input type="number" step="0.01" min="0" name="discount_amount" placeholder="0.00" class="input-field" value="${escapeAttr(amount)}" ${locked ? "readonly" : ""}>
       ${locked ? "" : '<button type="button" class="btn-remove" title="Eliminar">&times;</button>'}
     `;
     if (!locked) {

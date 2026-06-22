@@ -13,11 +13,17 @@ def _normalize_turso_value(column: str, value):
     if value is None:
         return None
     name = column.lower()
-    if name in ("id", "active", "cnt", "count") or name.endswith("_id"):
+    if name in ("id", "active", "cnt", "count", "c") or name.endswith("_id"):
         return int(value)
     if name in ("amount", "retiro_fee", "total") or name.startswith("total_"):
         return float(value)
     return value
+
+
+def parse_count(row, key: str = "c") -> int:
+    if not row:
+        return 0
+    return int(row[key])
 
 
 class _TursoCursor:
@@ -233,8 +239,8 @@ def db_info() -> dict:
 
     if USE_TURSO:
         with db_session() as conn:
-            users = conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"]
-            reports = conn.execute("SELECT COUNT(*) AS c FROM daily_reports").fetchone()["c"]
+            users = parse_count(conn.execute("SELECT COUNT(*) AS c FROM users").fetchone())
+            reports = parse_count(conn.execute("SELECT COUNT(*) AS c FROM daily_reports").fetchone())
         return {
             "exists": True,
             "path": TURSO_DATABASE_URL,
@@ -248,8 +254,8 @@ def db_info() -> dict:
 
     size_mb = round(DB_PATH.stat().st_size / (1024 * 1024), 2)
     with db_session() as conn:
-        users = conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"]
-        reports = conn.execute("SELECT COUNT(*) AS c FROM daily_reports").fetchone()["c"]
+        users = parse_count(conn.execute("SELECT COUNT(*) AS c FROM users").fetchone())
+        reports = parse_count(conn.execute("SELECT COUNT(*) AS c FROM daily_reports").fetchone())
 
     return {
         "exists": True,
