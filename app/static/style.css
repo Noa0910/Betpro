@@ -29,13 +29,34 @@ body {
   background: transparent;
 }
 
-.login-logo {
-  background: linear-gradient(145deg, rgba(16, 185, 129, 0.25), rgba(10, 22, 18, 0.95));
-  border: 1px solid var(--bp-border-strong);
-  color: var(--bp-green-bright);
-  box-shadow:
-    0 0 48px rgba(16, 185, 129, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+.brand-logo {
+  display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.45));
+}
+
+.brand-logo--xs {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+.brand-logo--sm {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+}
+
+.brand-logo--lg {
+  width: 160px;
+  height: 160px;
+  margin: 0 auto;
+}
+
+.brand-header {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
 }
 
 .login-card {

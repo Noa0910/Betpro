@@ -6,6 +6,19 @@
 </nav>
 {% endmacro %}
 
+{% macro brand_logo(size='sm') %}
+<img src="/static/logo.png" alt="BetPro Surebet" class="brand-logo brand-logo--{{ size }}">
+{% endmacro %}
+
+{% macro brand_header(subtitle='') %}
+<div class="brand-header">
+  {{ brand_logo('sm') }}
+  {% if subtitle %}
+  <p class="text-sm text-gray-400">{{ subtitle }}</p>
+  {% endif %}
+</div>
+{% endmacro %}
+
 {% macro password_field(label, name, required=true, autocomplete="current-password") %}
 <label class="password-field block" data-password-field>
   <span class="text-sm text-gray-400">{{ label }}</span>

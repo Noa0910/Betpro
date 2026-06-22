@@ -5,11 +5,8 @@
 <div class="login-page min-h-screen flex items-center justify-center p-4">
   <div class="w-full max-w-md">
     <div class="text-center mb-8">
-      <div class="login-logo inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4">
-        <span class="text-2xl font-black tracking-tight">BP</span>
-      </div>
-      <h1 class="text-3xl font-bold text-white tracking-tight">BetPro</h1>
-      <p class="text-slate-400 mt-2 text-sm uppercase tracking-widest">Trading Deportivo</p>
+      {{ ui.brand_logo('lg') }}
+      <p class="text-slate-400 mt-4 text-sm uppercase tracking-widest">Trading Deportivo</p>
     </div>
 
     <form method="post" action="{{ url.ACCESO }}" class="login-card rounded-2xl p-8 shadow-2xl">
