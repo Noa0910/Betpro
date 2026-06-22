@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block title %}Dashboard - BetPro Admin{% endblock %}
+{% block body %}
+<header class="app-header sticky top-0 z-10">
+  <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div>
+      <h1 class="text-xl font-bold">BetPro Admin</h1>
+      <p class="text-sm text-gray-400">{{ user.name }}</p>
+    </div>
+    {{ ui.admin_nav('dashboard') }}
+    <a href="/logout" class="text-sm text-gray-400 hover:text-white sm:ml-auto">Salir</a>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 py-8">
+  {% if message %}
+  <div class="mb-6 p-4 rounded-xl alert-success">{{ message }}</div>
+  {% endif %}
+  {% if error %}
+  <div class="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300">{{ error }}</div>
+  {% endif %}
+
+  <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-8">
+    <div>
+      <h2 class="text-3xl font-bold">Dashboard general</h2>
+      <p class="text-gray-400 mt-1">Ingresos, retiros y progreso de todos los clientes</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      {% for p, label in [('all', 'Todo'), ('today', 'Hoy'), ('week', '7 días'), ('month', 'Mes')] %}
+      <a href="/admin?period={{ p }}"
+        class="period-filter {% if period == p %}active{% endif %}">{{ label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <p class="text-sm text-gray-500 mb-4">Período: <strong class="text-gray-300">{{ analytics.period_label }}</strong></p>
+
+  <div class="dash-hero mb-8">
+    <div>
+      <p class="dash-hero-label">Ingreso neto confirmado ({{ analytics.period_label | lower }})</p>
+      <p class="dash-hero-value">{{ analytics.totals.net_income | money }}</p>
+      <p class="dash-hero-sub">Histórico total: {{ analytics.all_time_net | money }}</p>
+    </div>
+    <div class="dash-hero-stats">
+      <div><span>Clientes activos</span><strong>{{ analytics.active_clients }}</strong></div>
+      <div><span>Reportes confirmados</span><strong>{{ analytics.totals.confirmed_reports }}</strong></div>
+      <div><span>Pendientes de confirmar</span><strong class="text-amber-300">{{ analytics.total_pending }}</strong></div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+    <div class="dash-kpi">
+      <span class="dash-kpi-label">Retiros</span>
+      <span class="dash-kpi-value">{{ analytics.totals.retiros | money }}</span>
+      <span class="dash-kpi-sub">{{ analytics.totals.retiro_count }} operaciones</span>
+    </div>
+    <div class="dash-kpi">
+      <span class="dash-kpi-label">Cargues</span>
+      <span class="dash-kpi-value">{{ analytics.totals.cargues | money }}</span>
+    </div>
+    <div class="dash-kpi">
+      <span class="dash-kpi-label">Tarifas retiro</span>
+      <span class="dash-kpi-value">{{ analytics.totals.fees | money }}</span>
+    </div>
+    <div class="dash-kpi">
+      <span class="dash-kpi-label">Descuentos</span>
+      <span class="dash-kpi-value text-orange-300">{{ analytics.totals.discounts | money }}</span>
+    </div>
+    <div class="dash-kpi">
+      <span class="dash-kpi-label">Pendiente estimado</span>
+      <span class="dash-kpi-value text-amber-300">{{ analytics.totals.pending_estimated | money }}</span>
+      <span class="dash-kpi-sub">{{ analytics.totals.pending_reports }} reporte(s)</span>
+    </div>
+    <div class="dash-kpi">
+      <span class="dash-kpi-label">Días confirmados</span>
+      <span class="dash-kpi-value">{{ analytics.totals.confirmed_reports }}</span>
+    </div>
+  </div>
+
+  {% if pending_reports %}
+  <section class="mb-10">
+    <h3 class="text-xl font-bold mb-4">Reportes por confirmar</h3>
+    <div class="card overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-gray-400 border-b border-white/10">
+            <th class="pb-3 pr-4">Cliente</th>
+            <th class="pb-3 pr-4">Fecha</th>
+            <th class="pb-3 pr-4">Retiros</th>
+            <th class="pb-3 pr-4">Estimado</th>
+            <th class="pb-3">Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in pending_reports %}
+          <tr class="border-b border-white/5">
+            <td class="py-3 pr-4 font-medium">{{ p.user_name }}</td>
+            <td class="py-3 pr-4">{{ p.report_date }}</td>
+            <td class="py-3 pr-4">{{ p.summary.total_retiros | money }}</td>
+            <td class="py-3 pr-4 text-betpro-400">{{ p.summary.preview_total | money }}</td>
+            <td class="py-3">
+              <a href="/admin/clientes/{{ p.user_id }}?fecha={{ p.report_date }}" class="text-betpro-400 hover:underline">Revisar →</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  <div class="grid lg:grid-cols-2 gap-8 mb-10">
+    <section class="card">
+      <h3 class="card-title mb-1">Ingreso neto — últimos 14 días</h3>
+      <p class="text-sm text-gray-400 mb-6">Solo reportes confirmados</p>
+      <div class="trend-chart">
+        {% for day in analytics.daily_trend %}
+        <div class="trend-col" title="{{ day.date }}: {{ day.net | money }}">
+          <div class="trend-bar-wrap">
+            <div class="trend-bar {% if day.net >= 0 %}positive{% else %}negative{% endif %}"
+              style="height: {{ day.bar_pct }}%"></div>
+          </div>
+          <span class="trend-label">{{ day.date[8:10] }}/{{ day.date[5:7] }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="card">
+      <h3 class="card-title mb-1">Retiros vs cargues — 14 días</h3>
+      <p class="text-sm text-gray-400 mb-4">Volumen confirmado por día</p>
+      <div class="space-y-2 max-h-64 overflow-y-auto">
+        {% for day in analytics.daily_trend | reverse %}
+        <div class="trend-row">
+          <span class="trend-row-date">{{ day.date }}</span>
+          <span class="text-betpro-400">R {{ day.retiros | money }}</span>
+          <span class="text-orange-300">C {{ day.cargues | money }}</span>
+          <span class="{% if day.net >= 0 %}text-betpro-400{% else %}text-red-400{% endif %}">{{ day.net | money }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+
+  <section>
+    <h3 class="text-xl font-bold mb-2">Progreso por cliente</h3>
+    <p class="text-gray-400 mb-6">Acumulado confirmado y actividad de cada cliente</p>
+    <div class="card overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-gray-400 border-b border-white/10">
+            <th class="pb-3 pr-4">Cliente</th>
+            <th class="pb-3 pr-4">Acumulado</th>
+            <th class="pb-3 pr-4">Progreso</th>
+            <th class="pb-3 pr-4">Retiros</th>
+            <th class="pb-3 pr-4">Cargues</th>
+            <th class="pb-3 pr-4">Días conf.</th>
+            <th class="pb-3 pr-4">Pendientes</th>
+            <th class="pb-3">Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in analytics.clients_progress %}
+          <tr class="border-b border-white/5">
+            <td class="py-4 pr-4 font-medium">{{ c.name }}</td>
+            <td class="py-4 pr-4 font-bold text-betpro-400 text-lg">{{ c.cumulative | money }}</td>
+            <td class="py-4 pr-4 min-w-[140px]">
+              <div class="progress-track">
+                <div class="progress-fill" style="width: {{ c.progress_pct }}%"></div>
+              </div>
+              <span class="text-xs text-gray-500">{{ c.progress_pct }}%</span>
+            </td>
+            <td class="py-4 pr-4">{{ c.retiros | money }} <span class="text-gray-500">({{ c.retiro_count }})</span></td>
+            <td class="py-4 pr-4">{{ c.cargues | money }}</td>
+            <td class="py-4 pr-4">{{ c.confirmed_days }}</td>
+            <td class="py-4 pr-4">
+              {% if c.pending_days > 0 %}
+              <span class="badge-pending">{{ c.pending_days }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="py-4">
+              <a href="/admin/clientes/{{ c.user_id }}" class="text-betpro-400 hover:underline">Ver →</a>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="py-8 text-center text-gray-500">Sin datos de clientes</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+{% endblock %}

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block title %}Mi Panel - BetPro{% endblock %}
+{% block body %}
+<header class="app-header sticky top-0 z-10">
+  <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-bold">BetPro</h1>
+      <p class="text-sm text-gray-400">Hola, {{ user.name }}</p>
+    </div>
+    <a href="/logout" class="text-sm text-gray-400 hover:text-white">Salir</a>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-8">
+  {% if message %}
+  <div class="mb-6 p-4 rounded-xl alert-success">{{ message }}</div>
+  {% endif %}
+  {% if error %}
+  <div class="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300">{{ error }}</div>
+  {% endif %}
+
+  {{ ui.cumulative_banner(cumulative, "Solo reportes confirmados por el admin") }}
+
+  <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+    <div>
+      <h2 class="text-2xl font-bold">Reporte diario</h2>
+      <p class="text-gray-400">Guarda y se envía al admin para confirmación</p>
+    </div>
+    <div class="flex items-center gap-3">
+      {{ ui.report_status_badge(report) }}
+      <form method="get" action="/panel" class="flex items-center gap-2">
+        <label class="text-sm text-gray-400">Fecha:</label>
+        <input type="date" name="fecha" value="{{ report_date }}" onchange="this.form.submit()"
+          class="px-3 py-2 rounded-lg bg-black/40 border border-white/10">
+      </form>
+    </div>
+  </div>
+
+  {% if report.status == 'submitted' %}
+  <div class="mb-6 p-4 rounded-xl alert-warning text-sm">
+    Reporte enviado. Cargues y retiros están bloqueados — solo el admin puede modificarlos.
+    Si guardaste por error, pide al admin que te <strong>habilite la edición</strong> de nuevo.
+  </div>
+  {% elif report.status == 'confirmed' %}
+  <div class="mb-6 p-4 rounded-xl alert-success text-sm">
+    Reporte confirmado el {{ report.confirmed_at[:10] if report.confirmed_at else '—' }}. Ya cuenta en tu total acumulado.
+  </div>
+  {% endif %}
+
+  {% if report.client_can_edit %}
+  <form method="post" action="/panel/guardar" class="space-y-6">
+    <input type="hidden" name="report_date" value="{{ report_date }}">
+
+    <div class="grid md:grid-cols-2 gap-6">
+      {{ ui.amount_widget("Cargues del día", "Pulsa + para agregar cada cargue", "cargue_amount", cargues_items) }}
+      {{ ui.amount_widget("Retiros del día", "Pulsa + para agregar cada retiro", "retiro_amount", retiros_items) }}
+    </div>
+
+    {{ ui.discounts_readonly(report.discounts, report.summary.total_discounts) }}
+
+    <div class="card">
+      <h3 class="card-title">Notas (opcional)</h3>
+      <textarea name="notes" rows="2" class="input-field" placeholder="Observaciones del día">{{ report.notes or '' }}</textarea>
+    </div>
+
+    {{ ui.summary_boxes(report, report.retiro_fee) }}
+
+    <button type="submit" class="btn-primary">Enviar reporte del día</button>
+  </form>
+  {% else %}
+  {{ ui.client_report_readonly(report) }}
+  {{ ui.discounts_readonly(report.discounts, report.summary.total_discounts) }}
+  {% if report.notes and report.status != 'draft' %}
+  <div class="card mt-6">
+    <h3 class="card-title">Notas</h3>
+    <p class="text-gray-300">{{ report.notes }}</p>
+  </div>
+  {% endif %}
+  {{ ui.summary_boxes(report, report.retiro_fee) }}
+  {% endif %}
+
+  <div class="mt-10">
+    {{ ui.history_table(history) }}
+  </div>
+</main>
+<script src="/static/app.js"></script>
+{% endblock %}

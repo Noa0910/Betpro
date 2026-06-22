@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block title %}{{ worker.name }} - BetPro Admin{% endblock %}
+{% block body %}
+<header class="app-header sticky top-0 z-10">
+  <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div>
+      <a href="/admin/clientes" class="text-sm text-gray-400 hover:text-white">← Clientes</a>
+      <h1 class="text-xl font-bold mt-1">{{ worker.name }}</h1>
+      <p class="text-sm text-gray-400">@{{ worker.username }} · Tarifa retiro: {{ worker.retiro_fee | money }}</p>
+    </div>
+    {{ ui.admin_nav('clientes') }}
+    <a href="/logout" class="text-sm text-gray-400 hover:text-white">Salir</a>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-8">
+  {% if message %}
+  <div class="mb-6 p-4 rounded-xl alert-success">{{ message }}</div>
+  {% endif %}
+  {% if error %}
+  <div class="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300">{{ error }}</div>
+  {% endif %}
+
+  {{ ui.cumulative_banner(cumulative, "Total acumulado del cliente") }}
+
+  <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+    <div>
+      <h2 class="text-2xl font-bold">Reporte del cliente</h2>
+      <p class="text-gray-400">Solo tú puedes modificar cargues y retiros una vez enviados</p>
+    </div>
+    <div class="flex items-center gap-3 flex-wrap">
+      {{ ui.report_status_badge(report) }}
+      {% if can_reopen %}
+      <form method="post" action="/admin/clientes/{{ worker.id }}/reabrir">
+        <input type="hidden" name="report_date" value="{{ report_date }}">
+        <button type="submit" class="btn-secondary" onclick="return confirm('¿Habilitar edición al cliente? Podrá modificar cargues y retiros y volver a enviar.')">
+          Habilitar edición al cliente
+        </button>
+      </form>
+      {% endif %}
+      <form method="get" action="/admin/clientes/{{ worker.id }}" class="flex items-center gap-2">
+        <label class="text-sm text-gray-400">Fecha:</label>
+        <input type="date" name="fecha" value="{{ report_date }}" onchange="this.form.submit()"
+          class="px-3 py-2 rounded-lg bg-black/40 border border-white/10">
+      </form>
+    </div>
+  </div>
+
+  {% if admin_can_edit %}
+  <form method="post" action="/admin/clientes/{{ worker.id }}/guardar-datos" class="space-y-6">
+    <input type="hidden" name="report_date" value="{{ report_date }}">
+    <div class="p-4 rounded-xl alert-info text-sm mb-2">
+      Reporte enviado por el cliente. Solo tú puedes modificar cargues y retiros.
+    </div>
+    <div class="grid md:grid-cols-2 gap-6">
+      {{ ui.amount_widget("Cargues del día", "Modifica cargues con +", "cargue_amount", cargues_items) }}
+      {{ ui.amount_widget("Retiros del día", "Modifica retiros con +", "retiro_amount", retiros_items) }}
+    </div>
+    <button type="submit" class="btn-secondary">Guardar cargues y retiros</button>
+  </form>
+
+  {% if report.notes %}
+  <div class="card mt-6">
+    <h3 class="card-title">Notas del cliente</h3>
+    <p class="text-gray-300">{{ report.notes }}</p>
+  </div>
+  {% endif %}
+
+  <form method="post" action="/admin/clientes/{{ worker.id }}/confirmar-reporte" class="space-y-6 mt-6"
+    onsubmit="return confirmReporte()">
+    <input type="hidden" name="report_date" value="{{ report_date }}">
+    {{ ui.discount_widget_admin(discount_items) }}
+    <div class="card panel-confirm-box">
+      <h3 class="card-title">Confirmar reporte del día</h3>
+      <p class="text-sm text-gray-300 mb-4">
+        Verifica que <strong>todos los retiros</strong> ({{ report.summary.num_retiros }} por {{ report.summary.total_retiros | money }})
+        se realizaron correctamente.
+      </p>
+      <div class="grid md:grid-cols-2 gap-4 mb-4">
+        <div class="stat-box">
+          <span class="stat-label">Total estimado del día</span>
+          <span class="stat-value text-2xl text-betpro-400">{{ report.summary.preview_total | money }}</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">Retiros a validar</span>
+          <span class="stat-value">{{ report.summary.num_retiros }} retiros · {{ report.summary.total_retiros | money }}</span>
+        </div>
+      </div>
+      <button type="submit" class="btn-primary">Confirmar reporte completo</button>
+    </div>
+  </form>
+
+  {% elif is_confirmed %}
+  {{ ui.client_report_readonly(report) }}
+  {{ ui.discounts_readonly(report.discounts, report.summary.total_discounts) }}
+  <div class="card mt-6 stat-box-highlight">
+    <p class="text-betpro-400">Reporte confirmado el {{ report.confirmed_at[:16] if report.confirmed_at else '—' }}</p>
+  </div>
+
+  {% else %}
+  {% if report.cargues or report.retiros %}
+  {{ ui.client_report_readonly(report) }}
+  {% else %}
+  <div class="card">
+    <p class="empty-hint">El cliente aún no ha enviado el reporte de este día.</p>
+  </div>
+  {% endif %}
+  {% endif %}
+
+  <div class="mt-6">
+    {{ ui.summary_boxes(report, worker.retiro_fee) }}
+  </div>
+
+  <div class="mt-10">
+    {{ ui.history_table(history) }}
+  </div>
+</main>
+<script>
+function confirmReporte() {
+  if (!confirm("¿Confirmas que TODOS los retiros de este día se realizaron correctamente?")) return false;
+  return confirm("Segunda confirmación: ¿Confirmar el reporte completo? Esto sumará al total acumulado del cliente.");
+}
+</script>
+<script src="/static/app.js"></script>
+{% endblock %}

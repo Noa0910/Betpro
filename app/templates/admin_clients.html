@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block title %}Clientes - BetPro Admin{% endblock %}
+{% block body %}
+<header class="app-header sticky top-0 z-10">
+  <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div>
+      <h1 class="text-xl font-bold">BetPro Admin</h1>
+      <p class="text-sm text-gray-400">{{ user.name }}</p>
+    </div>
+    {{ ui.admin_nav('clientes') }}
+    <a href="/logout" class="text-sm text-gray-400 hover:text-white sm:ml-auto">Salir</a>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 py-8">
+  {% if message %}
+  <div class="mb-6 p-4 rounded-xl alert-success">{{ message }}</div>
+  {% endif %}
+  {% if error %}
+  <div class="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300">{{ error }}</div>
+  {% endif %}
+
+  <section class="mb-10">
+    <h2 class="text-2xl font-bold mb-2">Clientes</h2>
+    <p class="text-gray-400 mb-6">Gestiona cuentas, tarifas por retiro y revisa totales acumulados</p>
+
+    <div class="card overflow-x-auto mb-8">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-gray-400 border-b border-white/10">
+            <th class="pb-3 pr-4">Nombre</th>
+            <th class="pb-3 pr-4">Usuario</th>
+            <th class="pb-3 pr-4">Tarifa/retiro</th>
+            <th class="pb-3 pr-4">Acumulado</th>
+            <th class="pb-3 pr-4">Pendientes</th>
+            <th class="pb-3 pr-4">Estado</th>
+            <th class="pb-3">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for w in workers %}
+          <tr class="border-b border-white/5">
+            <td class="py-4 pr-4 font-medium">{{ w.name }}</td>
+            <td class="py-4 pr-4 text-gray-400">{{ w.username }}</td>
+            <td class="py-4 pr-4">
+              <form method="post" action="/admin/clientes/{{ w.id }}/tarifa" class="flex gap-2 items-center">
+                <input type="number" step="0.01" name="retiro_fee" value="{{ w.retiro_fee }}"
+                  class="w-24 px-2 py-1 rounded bg-black/40 border border-white/10 text-sm">
+                <button type="submit" class="text-xs text-betpro-400 hover:underline">Guardar</button>
+              </form>
+            </td>
+            <td class="py-4 pr-4 font-semibold text-betpro-400 text-lg">{{ w.cumulative_total | money }}</td>
+            <td class="py-4 pr-4">
+              {% if w.pending_reports > 0 %}
+              <span class="badge-pending">{{ w.pending_reports }} reporte(s)</span>
+              {% else %}
+              <span class="text-gray-500">—</span>
+              {% endif %}
+            </td>
+            <td class="py-4 pr-4">
+              {% if w.active %}
+              <span class="badge-active">Activo</span>
+              {% else %}
+              <span class="px-2 py-1 rounded-full text-xs bg-red-500/20 text-red-300">Inactivo</span>
+              {% endif %}
+            </td>
+            <td class="py-4 flex flex-wrap gap-2">
+              <a href="/admin/clientes/{{ w.id }}" class="text-sm text-betpro-400 hover:underline">Ver reportes</a>
+              <form method="post" action="/admin/clientes/{{ w.id }}/estado">
+                <input type="hidden" name="active" value="{{ 0 if w.active else 1 }}">
+                <button type="submit" class="text-sm text-gray-400 hover:text-white">
+                  {{ 'Desactivar' if w.active else 'Activar' }}
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="py-6 text-center text-gray-500">No hay clientes registrados</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h3 class="text-lg font-semibold mb-4">Agregar cliente</h3>
+    <form method="post" action="/admin/clientes" class="card grid md:grid-cols-4 gap-4">
+      <label>
+        <span class="text-sm text-gray-400">Nombre</span>
+        <input type="text" name="name" required class="input-field mt-1">
+      </label>
+      <label>
+        <span class="text-sm text-gray-400">Usuario</span>
+        <input type="text" name="username" required class="input-field mt-1">
+      </label>
+      <label>
+        <span class="text-sm text-gray-400">Contraseña</span>
+        <input type="password" name="password" required class="input-field mt-1">
+      </label>
+      <label>
+        <span class="text-sm text-gray-400">Tarifa por retiro ($)</span>
+        <input type="number" step="0.01" name="retiro_fee" value="50" required class="input-field mt-1">
+      </label>
+      <div class="md:col-span-4">
+        <button type="submit" class="btn-primary">Crear cliente</button>
+      </div>
+    </form>
+  </section>
+</main>
+{% endblock %}

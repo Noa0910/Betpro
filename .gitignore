@@ -1,0 +1,17 @@
+# Base de datos local (contiene contraseñas hasheadas)
+betpro.db
+betpro.db-wal
+betpro.db-shm
+
+# Respaldos
+backups/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Entorno
+.env
+.vercel

@@ -1,0 +1,158 @@
+import sqlite3
+from contextlib import contextmanager
+
+from app.config import DB_PATH
+
+
+def get_connection() -> sqlite3.Connection:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA synchronous = NORMAL")
+    return conn
+
+
+@contextmanager
+def db_session():
+    conn = get_connection()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    report_cols = {row[1] for row in conn.execute("PRAGMA table_info(daily_reports)").fetchall()}
+    if "status" not in report_cols:
+        conn.execute(
+            "ALTER TABLE daily_reports ADD COLUMN status TEXT NOT NULL DEFAULT 'draft'"
+        )
+    if "submitted_at" not in report_cols:
+        conn.execute("ALTER TABLE daily_reports ADD COLUMN submitted_at TEXT")
+    if "confirmed_at" not in report_cols:
+        conn.execute("ALTER TABLE daily_reports ADD COLUMN confirmed_at TEXT")
+    if "confirmed_by" not in report_cols:
+        conn.execute("ALTER TABLE daily_reports ADD COLUMN confirmed_by INTEGER")
+
+    retiro_cols = {row[1] for row in conn.execute("PRAGMA table_info(retiros)").fetchall()}
+    if "confirmed" in retiro_cols:
+        conn.execute(
+            """
+            UPDATE daily_reports
+            SET status = 'confirmed', confirmed_at = COALESCE(confirmed_at, updated_at)
+            WHERE status = 'draft'
+              AND id IN (
+                SELECT DISTINCT report_id FROM retiros WHERE confirmed = 1
+              )
+            """
+        )
+        conn.execute(
+            """
+            UPDATE daily_reports
+            SET status = 'submitted', submitted_at = COALESCE(submitted_at, updated_at)
+            WHERE status = 'draft'
+              AND (EXISTS (SELECT 1 FROM cargues c WHERE c.report_id = daily_reports.id)
+                   OR EXISTS (SELECT 1 FROM retiros r WHERE r.report_id = daily_reports.id))
+            """
+        )
+
+
+def _create_indexes(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE INDEX IF NOT EXISTS idx_reports_user_date
+            ON daily_reports(user_id, report_date);
+        CREATE INDEX IF NOT EXISTS idx_reports_status
+            ON daily_reports(status);
+        CREATE INDEX IF NOT EXISTS idx_cargues_report
+            ON cargues(report_id);
+        CREATE INDEX IF NOT EXISTS idx_retiros_report
+            ON retiros(report_id);
+        CREATE INDEX IF NOT EXISTS idx_discounts_report
+            ON discounts(report_id);
+        """
+    )
+
+
+def init_db() -> None:
+    with db_session() as conn:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                name TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role IN ('admin', 'worker')),
+                retiro_fee REAL NOT NULL DEFAULT 50,
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS daily_reports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                report_date TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'draft',
+                notes TEXT,
+                submitted_at TEXT,
+                confirmed_at TEXT,
+                confirmed_by INTEGER,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(user_id, report_date),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(confirmed_by) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS cargues (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                report_id INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                FOREIGN KEY(report_id) REFERENCES daily_reports(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS retiros (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                report_id INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                FOREIGN KEY(report_id) REFERENCES daily_reports(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS discounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                report_id INTEGER NOT NULL,
+                description TEXT NOT NULL,
+                amount REAL NOT NULL,
+                FOREIGN KEY(report_id) REFERENCES daily_reports(id) ON DELETE CASCADE
+            );
+            """
+        )
+        _migrate(conn)
+        _create_indexes(conn)
+
+
+def db_info() -> dict:
+    """Información básica de la base de datos (útil para admin/diagnóstico)."""
+    if not DB_PATH.exists():
+        return {"exists": False, "path": str(DB_PATH), "engine": "SQLite"}
+
+    size_mb = round(DB_PATH.stat().st_size / (1024 * 1024), 2)
+    with db_session() as conn:
+        users = conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"]
+        reports = conn.execute("SELECT COUNT(*) AS c FROM daily_reports").fetchone()["c"]
+
+    return {
+        "exists": True,
+        "path": str(DB_PATH),
+        "engine": "SQLite 3 (gratis, archivo local)",
+        "size_mb": size_mb,
+        "users": users,
+        "reports": reports,
+    }
