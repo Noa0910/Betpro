@@ -72,6 +72,59 @@ class _TursoCursor:
         return int(self._result.last_insert_rowid or 0)
 
 
+class _BetproTursoClient:
+    """Turso HTTP v2 con formato de args compatible con AWS."""
+
+    def __init__(self, database_url: str, auth_token: str):
+        from turso_python.connection import TursoConnection
+
+        self._client = TursoConnection(
+            database_url=database_url,
+            auth_token=auth_token,
+        )
+
+    @staticmethod
+    def _format_args(args: list | tuple | None) -> list[dict]:
+        if not args:
+            return []
+        formatted: list[dict] = []
+        for value in args:
+            if isinstance(value, str):
+                formatted.append({"type": "text", "value": value})
+            elif isinstance(value, bool):
+                formatted.append({"type": "integer", "value": "1" if value else "0"})
+            elif isinstance(value, int):
+                formatted.append({"type": "integer", "value": str(value)})
+            elif isinstance(value, float):
+                formatted.append({"type": "float", "value": value})
+            elif value is None:
+                formatted.append({"type": "null"})
+            else:
+                raise ValueError(f"Unsupported argument type: {type(value)}")
+        return formatted
+
+    def execute_query(self, sql: str, args: list | tuple | None = None) -> dict:
+        payload = {
+            "requests": [
+                {
+                    "type": "execute",
+                    "stmt": {"sql": sql, "args": self._format_args(args)},
+                },
+                {"type": "close"},
+            ]
+        }
+        response = self._client.session.post(
+            f"{self._client.database_url}/v2/pipeline",
+            json=payload,
+            headers=self._client.headers,
+            timeout=self._client.timeout,
+        )
+        return self._client._handle_response(response)
+
+    def close(self) -> None:
+        self._client.close()
+
+
 class _TursoConnection:
     def __init__(self, client):
         self._client = client
@@ -97,9 +150,7 @@ class _TursoConnection:
 
 def get_connection() -> Any:
     if USE_TURSO:
-        from turso_python.connection import TursoConnection
-
-        client = TursoConnection(
+        client = _BetproTursoClient(
             database_url=TURSO_DATABASE_URL,
             auth_token=TURSO_AUTH_TOKEN,
         )
