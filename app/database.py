@@ -6,8 +6,19 @@ from app.config import DB_PATH, IS_VERCEL, TURSO_AUTH_TOKEN, TURSO_DATABASE_URL,
 from app.db_row import DbRow
 
 
+def _unwrap_turso_cell(value):
+    """Turso HTTP v2 devuelve celdas como dict; null no trae 'value'."""
+    if isinstance(value, dict) and "type" in value:
+        if value.get("type") == "null":
+            return None
+        if "value" in value:
+            return value["value"]
+    return value
+
+
 def _normalize_turso_value(column: str, value):
     """Turso/libsql puede devolver enteros como str; normaliza tipos."""
+    value = _unwrap_turso_cell(value)
     if value is None:
         return None
     name = column.lower()
