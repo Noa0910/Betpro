@@ -5,8 +5,6 @@ from typing import Any, Optional
 from app.config import DB_PATH, IS_VERCEL, TURSO_AUTH_TOKEN, TURSO_DATABASE_URL, USE_TURSO
 from app.db_row import DbRow
 
-_turso_client = None
-
 
 def _normalize_turso_value(column: str, value):
     """Turso/libsql puede devolver enteros como str; normaliza tipos."""
@@ -26,8 +24,23 @@ def parse_count(row, key: str = "c") -> int:
     return int(row[key])
 
 
+class _TursoResult:
+    def __init__(self, response: dict):
+        from turso_python.response_parser import TursoResponseParser
+
+        normalized = TursoResponseParser.normalize_response(response)
+        self.columns = tuple(normalized["columns"])
+        self.rows = normalized["rows"]
+        try:
+            result = response["results"][0]["response"]["result"]
+            rid = result.get("last_insert_rowid")
+            self.last_insert_rowid = int(rid) if rid is not None else 0
+        except (KeyError, IndexError, TypeError, ValueError):
+            self.last_insert_rowid = 0
+
+
 class _TursoCursor:
-    def __init__(self, result_set):
+    def __init__(self, result_set: _TursoResult):
         self._result = result_set
         self._index = 0
 
@@ -64,16 +77,13 @@ class _TursoConnection:
         self._client = client
 
     def execute(self, sql: str, params: tuple | list = ()):
-        if params:
-            result = self._client.execute(sql, list(params))
-        else:
-            result = self._client.execute(sql)
-        return _TursoCursor(result)
+        response = self._client.execute_query(sql, list(params) if params else None)
+        return _TursoCursor(_TursoResult(response))
 
     def executescript(self, sql: str) -> None:
         statements = [part.strip() for part in sql.split(";") if part.strip()]
         for statement in statements:
-            self._client.execute(statement)
+            self._client.execute_query(statement)
 
     def commit(self) -> None:
         return None
@@ -82,24 +92,18 @@ class _TursoConnection:
         return None
 
     def close(self) -> None:
-        return None
-
-
-def _get_turso_client():
-    global _turso_client
-    if _turso_client is None:
-        import libsql_client
-
-        _turso_client = libsql_client.create_client_sync(
-            TURSO_DATABASE_URL,
-            auth_token=TURSO_AUTH_TOKEN,
-        )
-    return _turso_client
+        self._client.close()
 
 
 def get_connection() -> Any:
     if USE_TURSO:
-        return _TursoConnection(_get_turso_client())
+        from turso_python.connection import TursoConnection
+
+        client = TursoConnection(
+            database_url=TURSO_DATABASE_URL,
+            auth_token=TURSO_AUTH_TOKEN,
+        )
+        return _TursoConnection(client)
 
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)

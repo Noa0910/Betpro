@@ -26,15 +26,14 @@ IS_VERCEL = os.getenv("VERCEL") == "1"
 
 CANONICAL_HOST = os.getenv("BETPRO_CANONICAL_HOST", "www.betpro.management").strip()
 
-APP_VERSION = "2026.06.22-11"
+APP_VERSION = "2026.06.23-1"
 
 
 def _normalize_turso_url(url: str) -> str:
+    """Turso en AWS requiere HTTPS; libsql:// usa WebSocket (obsoleto)."""
     url = url.strip()
-    if url.startswith("https://"):
-        return "libsql://" + url[len("https://") :]
-    if url.startswith("http://"):
-        return "libsql://" + url[len("http://") :]
+    if url.startswith("libsql://"):
+        return "https://" + url[len("libsql://") :]
     return url
 
 

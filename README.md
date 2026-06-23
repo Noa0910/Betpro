@@ -141,7 +141,7 @@ turso db tokens create betpro
 | Variable | Valor |
 |----------|-------|
 | `TURSO_DATABASE_URL` | `libsql://betpro-xxx.turso.io` |
-| `TURSO_AUTH_TOKEN` | token generado arriba |
+| `TURSO_AUTH_TOKEN` | token generado arriba (copiar exacto, sin espacios) |
 | `BETPRO_SECRET` | texto aleatorio largo |
 | `BETPRO_ADMIN_PASSWORD` | contraseña segura del admin |
 
