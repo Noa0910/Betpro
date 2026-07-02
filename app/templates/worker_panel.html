@@ -3,9 +3,17 @@
 {% block title %}Mis reportes - BetPro{% endblock %}
 {% block body %}
 <header class="app-header sticky top-0 z-10">
-  <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+  <div class="max-w-6xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    {% if user.role == 'admin' %}
     {{ ui.brand_header('Hola, ' ~ user.name) }}
+    {{ ui.admin_nav('mis-reportes') }}
+    <a href="{{ url.SALIR }}" class="text-sm text-gray-400 hover:text-white sm:ml-auto">Salir</a>
+    {% else %}
+    <div>
+      {{ ui.brand_header('Hola, ' ~ user.name) }}
+    </div>
     <a href="{{ url.SALIR }}" class="text-sm text-gray-400 hover:text-white">Salir</a>
+    {% endif %}
   </div>
 </header>
 

@@ -21,13 +21,14 @@
   {{ ui.db_persistence_warning() }}
 
   <section class="mb-10">
-    <h2 class="text-2xl font-bold mb-2">Clientes</h2>
-    <p class="text-gray-400 mb-6">Gestiona cuentas, tarifas por retiro y revisa totales acumulados</p>
+    <h2 class="text-2xl font-bold mb-2">Clientes y administradores</h2>
+    <p class="text-gray-400 mb-6">Todos hacen reportes diarios. Gestiona tarifas, totales y revisión de reportes.</p>
 
     <div class="card overflow-x-auto mb-8">
       <table class="w-full text-sm">
         <thead>
           <tr class="text-left text-gray-400 border-b border-white/10">
+            <th class="pb-3 pr-4">Tipo</th>
             <th class="pb-3 pr-4">Nombre</th>
             <th class="pb-3 pr-4">Usuario</th>
             <th class="pb-3 pr-4">Tarifa/retiro</th>
@@ -40,6 +41,13 @@
         <tbody>
           {% for w in workers %}
           <tr class="border-b border-white/5">
+            <td class="py-4 pr-4">
+              {% if w.role == 'admin' %}
+              <span class="badge-pending">Admin</span>
+              {% else %}
+              <span class="badge-active">Cliente</span>
+              {% endif %}
+            </td>
             <td class="py-4 pr-4 font-medium">{{ w.name }}</td>
             <td class="py-4 pr-4 text-gray-400">{{ w.username }}</td>
             <td class="py-4 pr-4">
@@ -66,16 +74,18 @@
             </td>
             <td class="py-4 flex flex-wrap gap-2">
               <a href="{{ url.cliente(w.id) }}" class="text-sm text-betpro-400 hover:underline">Ver reportes</a>
+              {% if w.role == 'worker' %}
               <form method="post" action="{{ url.cliente_estado(w.id) }}">
                 <input type="hidden" name="active" value="{{ 0 if w.active else 1 }}">
                 <button type="submit" class="text-sm text-gray-400 hover:text-white">
                   {{ 'Desactivar' if w.active else 'Activar' }}
                 </button>
               </form>
+              {% endif %}
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="7" class="py-6 text-center text-gray-500">No hay clientes registrados</td></tr>
+          <tr><td colspan="8" class="py-6 text-center text-gray-500">No hay cuentas registradas</td></tr>
           {% endfor %}
         </tbody>
       </table>

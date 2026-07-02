@@ -10,7 +10,11 @@
         {{ ui.brand_logo('xs') }}
         <div>
           <h1 class="text-xl font-bold">{{ worker.name }}</h1>
-          <p class="text-sm text-gray-400">@{{ worker.username }} · Tarifa retiro: {{ worker.retiro_fee | money }}</p>
+          <p class="text-sm text-gray-400">
+            @{{ worker.username }}
+            {% if worker.role == 'admin' %} · Admin{% else %} · Cliente{% endif %}
+            · Tarifa retiro: {{ worker.retiro_fee | money }}
+          </p>
         </div>
       </div>
     </div>
@@ -35,8 +39,10 @@
 
   <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
     <div>
-      <h2 class="text-2xl font-bold">Reporte del cliente</h2>
-      <p class="text-gray-400">Solo tú puedes modificar cargues y retiros una vez enviados</p>
+      <h2 class="text-2xl font-bold">Reporte diario</h2>
+      <p class="text-gray-400">
+        {% if worker.role == 'admin' %}Reporte del administrador{% else %}Reporte del cliente{% endif %}
+      </p>
     </div>
     <div class="flex items-center gap-3 flex-wrap">
       {{ ui.report_status_badge(report) }}
@@ -56,11 +62,17 @@
     </div>
   </div>
 
+  {% if report.status == 'submitted' and not can_confirm and not admin_can_edit %}
+  <div class="p-4 rounded-xl alert-info text-sm mb-6">
+    Reporte enviado. Otro administrador debe revisarlo y confirmarlo.
+  </div>
+  {% endif %}
+
   {% if admin_can_edit %}
   <form method="post" action="{{ url.cliente_guardar(worker.id) }}" class="space-y-6">
     <input type="hidden" name="report_date" value="{{ report_date }}">
     <div class="p-4 rounded-xl alert-info text-sm mb-2">
-      Reporte enviado por el cliente. Solo tú puedes modificar cargues y retiros.
+      Reporte enviado. Solo tú puedes modificar cargues y retiros antes de confirmar.
     </div>
     <div class="grid md:grid-cols-2 gap-6">
       {{ ui.amount_widget("Cargues del día", "Modifica cargues con +", "cargue_amount", cargues_items) }}
@@ -71,11 +83,12 @@
 
   {% if report.notes %}
   <div class="card mt-6">
-    <h3 class="card-title">Notas del cliente</h3>
+    <h3 class="card-title">Notas</h3>
     <p class="text-gray-300">{{ report.notes }}</p>
   </div>
   {% endif %}
 
+  {% if can_confirm %}
   <form method="post" action="{{ url.cliente_confirmar(worker.id) }}" class="space-y-6 mt-6"
     onsubmit="return confirmReporte()">
     <input type="hidden" name="report_date" value="{{ report_date }}">
@@ -99,6 +112,7 @@
       <button type="submit" class="btn-primary">Confirmar reporte completo</button>
     </div>
   </form>
+  {% endif %}
 
   {% elif is_confirmed %}
   {{ ui.client_report_readonly(report) }}

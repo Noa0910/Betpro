@@ -336,9 +336,6 @@ async def worker_panel(request: Request, fecha: str | None = None):
     if auth_redirect:
         return auth_redirect
 
-    if user["role"] == "admin":
-        return RedirectResponse(U.REPORTES, status_code=303)
-
     report_date = parse_report_date(fecha)
     return render_worker_panel(
         request,
@@ -585,7 +582,7 @@ async def admin_worker_detail(request: Request, worker_id: int, fecha: str | Non
     from app.auth import get_user_by_id
 
     worker = get_user_by_id(worker_id)
-    if not worker or worker["role"] != "worker":
+    if not worker or worker["role"] not in ("worker", "admin"):
         return RedirectResponse(U.REPORTES, status_code=303)
 
     report_date = parse_report_date(fecha)
@@ -614,10 +611,10 @@ async def admin_worker_detail(request: Request, worker_id: int, fecha: str | Non
             "report_date": report_date,
             "history": history,
             "cumulative": cumulative,
-            "can_confirm": details["status"] == REPORT_SUBMITTED,
+            "can_confirm": details["status"] == REPORT_SUBMITTED and worker_id != user["id"],
             "is_confirmed": details["status"] == REPORT_CONFIRMED,
-            "can_reopen": details["status"] == REPORT_SUBMITTED,
-            "admin_can_edit": details["admin_can_edit_entries"],
+            "can_reopen": details["status"] == REPORT_SUBMITTED and worker_id != user["id"],
+            "admin_can_edit": details["admin_can_edit_entries"] and worker_id != user["id"],
             "message": request.query_params.get("msg"),
             "error": request.query_params.get("error"),
             **ctx,

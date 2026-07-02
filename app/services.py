@@ -476,6 +476,8 @@ def confirm_report(report_id: int, admin_id: int) -> bool:
         return False
     if not details["cargues"] and not details["retiros"]:
         return False
+    if _as_int(details["user_id"]) == admin_id:
+        raise ValueError("No puedes confirmar tu propio reporte. Otro administrador debe confirmarlo.")
 
     with db_session() as conn:
         conn.execute(
@@ -535,8 +537,8 @@ def list_workers() -> list[dict]:
             """
             SELECT id, username, name, role, retiro_fee, active, created_at
             FROM users
-            WHERE role = 'worker'
-            ORDER BY name
+            WHERE role IN ('worker', 'admin')
+            ORDER BY role DESC, name
             """
         ).fetchall()
         workers = []
@@ -571,7 +573,7 @@ def create_admin(username: str, password: str, name: str) -> None:
         conn.execute(
             """
             INSERT INTO users (username, password_hash, name, role, retiro_fee)
-            VALUES (?, ?, ?, 'admin', 0)
+            VALUES (?, ?, ?, 'admin', 50)
             """,
             (username, hash_password(password), name),
         )
@@ -636,7 +638,7 @@ def create_worker(username: str, password: str, name: str, retiro_fee: float) ->
 def update_worker_fee(worker_id: int, retiro_fee: float) -> None:
     with db_session() as conn:
         conn.execute(
-            "UPDATE users SET retiro_fee = ? WHERE id = ? AND role = 'worker'",
+            "UPDATE users SET retiro_fee = ? WHERE id = ?",
             (retiro_fee, worker_id),
         )
 
@@ -677,7 +679,7 @@ def _load_reports_index() -> tuple[list[dict], dict, dict, dict]:
                        dr.submitted_at, dr.confirmed_at, u.name AS user_name, u.retiro_fee
                 FROM daily_reports dr
                 JOIN users u ON u.id = dr.user_id
-                WHERE u.role = 'worker'
+                WHERE u.role IN ('worker', 'admin')
                 ORDER BY dr.report_date DESC
                 """
             ).fetchall()

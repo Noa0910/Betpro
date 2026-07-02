@@ -1,6 +1,7 @@
 {% macro admin_nav(active) %}
 <nav class="admin-nav flex flex-wrap gap-2 mb-6">
   <a href="{{ url.REPORTES }}" class="admin-nav-link {% if active == 'reportes' %}active{% endif %}">Reportes</a>
+  <a href="{{ url.MIS_REPORTES }}" class="admin-nav-link {% if active == 'mis-reportes' %}active{% endif %}">Mis reportes</a>
   <a href="{{ url.CLIENTES }}" class="admin-nav-link {% if active == 'clientes' %}active{% endif %}">Clientes</a>
   <a href="{{ url.ADMINISTRADORES }}" class="admin-nav-link {% if active == 'administradores' %}active{% endif %}">Administradores</a>
 </nav>
