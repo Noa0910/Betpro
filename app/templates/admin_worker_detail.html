@@ -62,6 +62,27 @@
     </div>
   </div>
 
+  {% if can_change_date %}
+  <div class="card mb-6">
+    <h3 class="card-title">Corregir fecha del reporte</h3>
+    <p class="text-sm text-gray-400 mb-4">
+      Si envió el reporte con la fecha equivocada (por ejemplo, el día 3 pero corresponde al día 2),
+      asígnalo al día correcto <strong>antes de confirmar</strong>.
+    </p>
+    <form method="post" action="{{ url.cliente_cambiar_fecha(worker.id) }}" class="flex flex-wrap items-end gap-3">
+      <input type="hidden" name="report_date" value="{{ report_date }}">
+      <label class="block">
+        <span class="text-sm text-gray-400">Fecha correcta</span>
+        <input type="date" name="new_report_date" required class="input-field mt-1">
+      </label>
+      <button type="submit" class="btn-secondary"
+        onclick="return confirm('¿Mover este reporte a la fecha indicada? Los cargues y retiros se conservan.')">
+        Cambiar fecha
+      </button>
+    </form>
+  </div>
+  {% endif %}
+
   {% if report.status == 'submitted' and not can_confirm and not admin_can_edit %}
   <div class="p-4 rounded-xl alert-info text-sm mb-6">
     Reporte enviado. Otro administrador debe revisarlo y confirmarlo.

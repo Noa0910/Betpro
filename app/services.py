@@ -494,6 +494,51 @@ def confirm_report(report_id: int, admin_id: int) -> bool:
     return True
 
 
+def change_report_date(report_id: int, new_date: str) -> str:
+    """Mueve un reporte a otra fecha (solo si no está confirmado)."""
+    new_date = parse_report_date(new_date)
+    details = get_report_details(report_id)
+    if not details:
+        raise ValueError("Reporte no encontrado")
+    if details["status"] == REPORT_CONFIRMED:
+        raise ValueError("No se puede cambiar la fecha de un reporte ya confirmado")
+    if details["report_date"] == new_date:
+        raise ValueError("Selecciona una fecha diferente a la actual")
+
+    user_id = _as_int(details["user_id"])
+    with db_session() as conn:
+        existing = conn.execute(
+            """
+            SELECT id FROM daily_reports
+            WHERE user_id = ? AND report_date = ? AND id != ?
+            """,
+            (user_id, new_date, report_id),
+        ).fetchone()
+        if existing:
+            other = get_report_details(_as_int(existing["id"]))
+            if other and (
+                other["cargues"]
+                or other["retiros"]
+                or other["discounts"]
+                or other["status"] != REPORT_DRAFT
+            ):
+                raise ValueError(
+                    f"Ya existe un reporte para el {new_date}. "
+                    "Revisa esa fecha o elige otra."
+                )
+            conn.execute("DELETE FROM daily_reports WHERE id = ?", (_as_int(existing["id"]),))
+
+        conn.execute(
+            """
+            UPDATE daily_reports
+            SET report_date = ?, updated_at = datetime('now')
+            WHERE id = ?
+            """,
+            (new_date, report_id),
+        )
+    return new_date
+
+
 def list_pending_reports(limit: int = 20) -> list[dict]:
     with db_session() as conn:
         rows = conn.execute(

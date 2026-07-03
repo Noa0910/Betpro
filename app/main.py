@@ -34,6 +34,7 @@ from app.services import (
     save_admin_entries,
     save_client_report,
     save_discounts,
+    change_report_date,
     parse_report_date,
     today_iso,
     update_worker_fee,
@@ -615,6 +616,12 @@ async def admin_worker_detail(request: Request, worker_id: int, fecha: str | Non
             "is_confirmed": details["status"] == REPORT_CONFIRMED,
             "can_reopen": details["status"] == REPORT_SUBMITTED and worker_id != user["id"],
             "admin_can_edit": details["admin_can_edit_entries"] and worker_id != user["id"],
+            "can_change_date": details["status"] != REPORT_CONFIRMED
+            and (
+                details["status"] == REPORT_SUBMITTED
+                or details["cargues"]
+                or details["retiros"]
+            ),
             "message": request.query_params.get("msg"),
             "error": request.query_params.get("error"),
             **ctx,
@@ -758,6 +765,36 @@ async def admin_save_entries(
             U.cliente(worker_id),
             fecha=report_date,
             msg="Cargues y retiros actualizados",
+        ),
+        status_code=303,
+    )
+
+
+@app.post("/clientes/{worker_id}/cambiar-fecha")
+async def admin_change_report_date(
+    request: Request,
+    worker_id: int,
+    report_date: str = Form(...),
+    new_report_date: str = Form(...),
+):
+    _, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
+
+    report = get_or_create_report(worker_id, report_date)
+    try:
+        new_date = change_report_date(report["id"], new_report_date)
+    except ValueError as exc:
+        return RedirectResponse(
+            with_query(U.cliente(worker_id), fecha=report_date, error=str(exc)),
+            status_code=303,
+        )
+
+    return RedirectResponse(
+        with_query(
+            U.cliente(worker_id),
+            fecha=new_date,
+            msg=f"Reporte movido al {new_date}",
         ),
         status_code=303,
     )

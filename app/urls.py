@@ -40,5 +40,9 @@ def cliente_guardar(worker_id: int) -> str:
     return f"{CLIENTES}/{worker_id}/guardar-datos"
 
 
+def cliente_cambiar_fecha(worker_id: int) -> str:
+    return f"{CLIENTES}/{worker_id}/cambiar-fecha"
+
+
 def admin_estado(admin_id: int) -> str:
     return f"{ADMINISTRADORES}/{admin_id}/estado"
