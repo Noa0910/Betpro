@@ -380,12 +380,13 @@ async def worker_save_report(
         )
 
     if submit:
+        msg = (
+            "Reporte guardado y confirmado. Ya suma en tu total acumulado."
+            if user["role"] == "admin"
+            else "Reporte enviado al admin para confirmación"
+        )
         return RedirectResponse(
-            with_query(
-                U.MIS_REPORTES,
-                fecha=report_date,
-                msg="Reporte enviado al admin para confirmación",
-            ),
+            with_query(U.MIS_REPORTES, fecha=report_date, msg=msg),
             status_code=303,
         )
 

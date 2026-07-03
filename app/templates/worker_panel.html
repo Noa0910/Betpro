@@ -34,7 +34,13 @@
   <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
     <div>
       <h2 class="text-2xl font-bold">Reporte diario</h2>
-      <p class="text-gray-400">Guarda el avance del día y envía al admin cuando termines</p>
+      <p class="text-gray-400">
+        {% if user.role == 'admin' %}
+        Guarda tu reporte del día — se confirma automáticamente al enviar
+        {% else %}
+        Guarda el avance del día y envía al admin cuando termines
+        {% endif %}
+      </p>
     </div>
     <div class="flex items-center gap-3">
       {{ ui.report_status_badge(report) }}
@@ -54,7 +60,11 @@
   {% elif report.status == 'draft' and (report.cargues or report.retiros or report.notes) %}
   <div class="mb-6 p-4 rounded-xl alert-info text-sm">
     Tienes un borrador guardado. Puedes salir, volver a entrar y seguir editando.
+    {% if user.role == 'admin' %}
+    Cuando termines, usa <strong>Guardar y confirmar</strong>.
+    {% else %}
     Cuando termines el día, usa <strong>Guardar y enviar</strong>.
+    {% endif %}
   </div>
   {% elif report.status == 'confirmed' %}
   <div class="mb-6 p-4 rounded-xl alert-success text-sm">
@@ -89,12 +99,22 @@
         name="action"
         value="submit"
         class="btn-primary"
+        {% if user.role == 'admin' %}
+        onclick="return confirm('¿Confirmar reporte del día? Se sumará a tu total acumulado.')"
+        {% else %}
         onclick="return confirm('¿Enviar reporte al admin? Después no podrás editarlo hasta que te habiliten.')"
+        {% endif %}
       >
-        Guardar y enviar
+        {% if user.role == 'admin' %}Guardar y confirmar{% else %}Guardar y enviar{% endif %}
       </button>
     </div>
-    <p class="text-xs text-gray-500">Usa <strong>Guardar</strong> para ir anotando durante el día. <strong>Guardar y enviar</strong> lo manda al admin.</p>
+    <p class="text-xs text-gray-500">
+      {% if user.role == 'admin' %}
+      Usa <strong>Guardar</strong> para borrador. <strong>Guardar y confirmar</strong> lo registra de inmediato.
+      {% else %}
+      Usa <strong>Guardar</strong> para ir anotando durante el día. <strong>Guardar y enviar</strong> lo manda al admin.
+      {% endif %}
+    </p>
   </form>
   {% else %}
   {{ ui.client_report_readonly(report) }}

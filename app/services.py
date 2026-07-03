@@ -366,22 +366,44 @@ def save_client_report(
     retiros = parse_amounts_form(retiro_amounts)
 
     if submit and not cargues and not retiros:
-        raise ValueError("Agrega al menos un cargue o retiro antes de enviar al admin.")
+        raise ValueError("Agrega al menos un cargue o retiro antes de enviar.")
 
+    user_id = _as_int(details["user_id"])
     with db_session() as conn:
+        role_row = conn.execute(
+            "SELECT role FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        is_admin = role_row and role_row["role"] == "admin"
+
         _write_report_entries(conn, report_id, cargues, retiros)
         if submit:
-            conn.execute(
-                """
-                UPDATE daily_reports
-                SET notes = ?,
-                    status = 'submitted',
-                    submitted_at = datetime('now'),
-                    updated_at = datetime('now')
-                WHERE id = ?
-                """,
-                (notes.strip() or None, report_id),
-            )
+            if is_admin:
+                conn.execute(
+                    """
+                    UPDATE daily_reports
+                    SET notes = ?,
+                        status = 'confirmed',
+                        submitted_at = datetime('now'),
+                        confirmed_at = datetime('now'),
+                        confirmed_by = ?,
+                        updated_at = datetime('now')
+                    WHERE id = ?
+                    """,
+                    (notes.strip() or None, user_id, report_id),
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE daily_reports
+                    SET notes = ?,
+                        status = 'submitted',
+                        submitted_at = datetime('now'),
+                        updated_at = datetime('now')
+                    WHERE id = ?
+                    """,
+                    (notes.strip() or None, report_id),
+                )
         else:
             conn.execute(
                 """
