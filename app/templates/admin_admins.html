@@ -5,7 +5,7 @@
 <header class="app-header sticky top-0 z-10">
   <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
     {{ ui.brand_header(user.name) }}
-    {{ ui.admin_nav('administradores') }}
+    {{ ui.admin_nav('administradores', request.url.path) }}
     <a href="{{ url.SALIR }}" class="text-sm text-gray-400 hover:text-white sm:ml-auto">Salir</a>
   </div>
 </header>

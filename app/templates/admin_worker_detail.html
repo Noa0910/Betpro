@@ -18,7 +18,7 @@
         </div>
       </div>
     </div>
-    {{ ui.admin_nav('clientes') }}
+    {{ ui.admin_nav('clientes', request.url.path) }}
     <a href="{{ url.SALIR }}" class="text-sm text-gray-400 hover:text-white">Salir</a>
   </div>
 </header>
