@@ -10,14 +10,17 @@ def get_system_currency() -> str:
     global _currency_cache
     if _currency_cache is not None:
         return _currency_cache
-    with db_session() as conn:
-        row = conn.execute(
-            "SELECT value FROM app_settings WHERE key = 'currency'"
-        ).fetchone()
-        if row:
-            _currency_cache = normalize_currency(row["value"])
-        else:
-            _currency_cache = DEFAULT_CURRENCY
+    try:
+        with db_session() as conn:
+            row = conn.execute(
+                "SELECT value FROM app_settings WHERE key = 'currency'"
+            ).fetchone()
+            if row:
+                _currency_cache = normalize_currency(row["value"])
+            else:
+                _currency_cache = DEFAULT_CURRENCY
+    except Exception:
+        _currency_cache = DEFAULT_CURRENCY
     return _currency_cache
 
 

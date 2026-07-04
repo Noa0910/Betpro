@@ -340,7 +340,15 @@ def init_db() -> None:
                 amount REAL NOT NULL,
                 FOREIGN KEY(report_id) REFERENCES daily_reports(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS app_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
             """
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO app_settings (key, value) VALUES ('currency', 'USD')"
         )
         _migrate(conn)
         _create_indexes(conn)

@@ -108,11 +108,13 @@ def startup() -> None:
 @app.get("/api/salud")
 async def health_check():
     from app.database import check_db_connection
+    from app.settings import get_system_currency
 
     db = check_db_connection()
     payload = {
         "ok": db.get("ok", False),
         "version": APP_VERSION,
+        "currency": get_system_currency(),
         "database": db,
     }
     return JSONResponse(payload, status_code=200 if db.get("ok") else 503)
