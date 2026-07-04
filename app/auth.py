@@ -22,10 +22,15 @@ def verify_password(plain: str, hashed: str) -> bool:
 def get_user_by_id(user_id: int) -> Optional[dict]:
     with db_session() as conn:
         row = conn.execute(
-            "SELECT id, username, name, role, retiro_fee, active FROM users WHERE id = ?",
+            "SELECT id, username, name, role, retiro_fee, currency, active FROM users WHERE id = ?",
             (user_id,),
         ).fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        user = dict(row)
+        from app.currencies import normalize_currency
+        user["currency"] = normalize_currency(user.get("currency"))
+        return user
 
 
 def get_user_by_username(username: str) -> Optional[dict]:
@@ -38,12 +43,14 @@ def get_user_by_username(username: str) -> Optional[dict]:
 
 
 def session_user_payload(user: dict) -> dict:
+    from app.currencies import normalize_currency
     return {
         "id": int(user["id"]),
         "username": user["username"],
         "name": user["name"],
         "role": user["role"],
         "retiro_fee": float(user.get("retiro_fee") or 0),
+        "currency": normalize_currency(user.get("currency")),
     }
 
 

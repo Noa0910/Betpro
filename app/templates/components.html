@@ -55,6 +55,17 @@
 </div>
 {% endmacro %}
 
+{% macro currency_select(name='currency', selected='USD', label='Divisa') %}
+<label class="block">
+  <span class="text-sm text-gray-400">{{ label }}</span>
+  <select name="{{ name }}" class="input-field mt-1" data-currency-select>
+    {% for code, label_text in currency_choices() %}
+    <option value="{{ code }}" {% if code == selected %}selected{% endif %}>{{ label_text }}</option>
+    {% endfor %}
+  </select>
+</label>
+{% endmacro %}
+
 {% macro cumulative_banner(total, subtitle="", day_total=none) %}
 <div class="cumulative-banner{% if day_total is not none %} cumulative-banner--split{% endif %}">
   <div>
@@ -237,17 +248,17 @@
       <tr class="border-b border-white/5 hover:bg-white/5">
         <td class="py-3 pr-4">{{ h.report_date }}</td>
         <td class="py-3 pr-4">{{ report_status_badge(h) }}</td>
-        <td class="py-3 pr-4">{{ h.summary.total_cargues | money }}</td>
-        <td class="py-3 pr-4">{{ h.summary.total_retiros | money }}</td>
-        <td class="py-3 pr-4 text-orange-300">− {{ h.summary.total_fees | money }}</td>
+        <td class="py-3 pr-4">{{ h.summary.total_cargues | money(h.currency) }}</td>
+        <td class="py-3 pr-4">{{ h.summary.total_retiros | money(h.currency) }}</td>
+        <td class="py-3 pr-4 text-orange-300">− {{ h.summary.total_fees | money(h.currency) }}</td>
         <td class="py-3 pr-4 {% if h.summary.preview_total >= 0 %}text-betpro-400{% else %}text-red-400{% endif %}">
           {% if h.summary.is_confirmed %}
-            {{ h.summary.daily_total | money }}
+            {{ h.summary.daily_total | money(h.currency) }}
           {% else %}
-            <span class="text-gray-500">{{ h.summary.preview_total | money }}</span>
+            <span class="text-gray-500">{{ h.summary.preview_total | money(h.currency) }}</span>
           {% endif %}
         </td>
-        <td class="py-3 font-semibold">{{ h.cumulative_total | money }}</td>
+        <td class="py-3 font-semibold">{{ h.cumulative_total | money(h.currency) }}</td>
       </tr>
       {% else %}
       <tr><td colspan="7" class="py-6 text-center text-gray-500">Sin reportes guardados</td></tr>

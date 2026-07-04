@@ -35,7 +35,7 @@
   </script>
   <link rel="stylesheet" href="/static/style.css">
 </head>
-<body class="min-h-screen text-slate-100 font-sans antialiased">
+<body class="min-h-screen text-slate-100 font-sans antialiased" data-currency="{{ currency | default('USD') }}">
   {% block body %}{% endblock %}
   {% if app_version %}
   <p class="app-version">BetPro v{{ app_version }}</p>

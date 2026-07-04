@@ -40,6 +40,10 @@
         {% else %}
         Guarda el avance del día y envía al admin cuando termines
         {% endif %}
+        · Divisa: <strong>{{ currency }}</strong>
+        {% if user.role != 'admin' %}
+        <span class="text-gray-500">(la configura el administrador)</span>
+        {% endif %}
       </p>
     </div>
     <div class="flex items-center gap-3">

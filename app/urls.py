@@ -20,6 +20,10 @@ def cliente_tarifa(worker_id: int) -> str:
     return f"{CLIENTES}/{worker_id}/tarifa"
 
 
+def cliente_divisa(worker_id: int) -> str:
+    return f"{CLIENTES}/{worker_id}/divisa"
+
+
 def cliente_estado(worker_id: int) -> str:
     return f"{CLIENTES}/{worker_id}/estado"
 

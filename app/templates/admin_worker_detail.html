@@ -13,7 +13,8 @@
           <p class="text-sm text-gray-400">
             @{{ worker.username }}
             {% if worker.role == 'admin' %} · Admin{% else %} · Cliente{% endif %}
-            · Tarifa retiro: {{ worker.retiro_fee | money }}
+            · Tarifa retiro: {{ worker.retiro_fee | money(worker.currency) }}
+            · Divisa: {{ worker.currency }}
           </p>
         </div>
       </div>
@@ -94,6 +95,9 @@
     <input type="hidden" name="report_date" value="{{ report_date }}">
     <div class="p-4 rounded-xl alert-info text-sm mb-2">
       Reporte enviado. Solo tú puedes modificar cargues y retiros antes de confirmar.
+    </div>
+    <div class="card grid sm:grid-cols-2 gap-4">
+      {{ ui.currency_select('currency', currency, 'Divisa del reporte') }}
     </div>
     <div class="grid md:grid-cols-2 gap-6">
       {{ ui.amount_widget("Cargues del día", "Modifica cargues con +", "cargue_amount", cargues_items) }}

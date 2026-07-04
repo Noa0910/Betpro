@@ -32,15 +32,29 @@ function createAmountRow(value, options = {}) {
   return row;
 }
 
-function formatMoney(value) {
+const CURRENCY_SYMBOLS = {
+  USD: "US$",
+  MXN: "MX$",
+  COP: "COP$",
+  EUR: "€",
+};
+
+function getActiveCurrency() {
+  const select = document.querySelector("[data-currency-select]");
+  if (select?.value) return select.value;
+  return document.body.dataset.currency || "USD";
+}
+
+function formatMoney(value, currency) {
+  const code = currency || getActiveCurrency();
+  const sym = CURRENCY_SYMBOLS[code] || CURRENCY_SYMBOLS.USD;
   const num = Number(value) || 0;
-  return (
-    "$" +
-    num.toLocaleString("es-MX", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })
-  );
+  const amount = num.toLocaleString("es-MX", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  if (sym === "€") return `${amount} ${sym}`;
+  return `${sym}${amount}`;
 }
 
 function recalcDaySummary() {
@@ -105,12 +119,7 @@ function initAmountList(container, options = {}) {
       const val = parseFloat(input.value);
       if (!isNaN(val)) sum += val;
     });
-    totalEl.textContent =
-      "$" +
-      sum.toLocaleString("es-MX", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      });
+    totalEl.textContent = formatMoney(sum);
     recalcDaySummary();
   }
 
@@ -165,6 +174,23 @@ function initDiscountList(container) {
 
 document.addEventListener("DOMContentLoaded", () => {
   initPasswordFields();
+
+  document.querySelectorAll("[data-currency-select]").forEach((select) => {
+    select.addEventListener("change", () => {
+      document.body.dataset.currency = select.value;
+      recalcDaySummary();
+      document.querySelectorAll("[data-amount-widget]").forEach((widget) => {
+        const totalEl = widget.querySelector("[data-list-total]");
+        if (!totalEl) return;
+        let sum = 0;
+        widget.querySelectorAll('[data-field="amount"]').forEach((input) => {
+          const val = parseFloat(input.value);
+          if (!isNaN(val)) sum += val;
+        });
+        totalEl.textContent = formatMoney(sum);
+      });
+    });
+  });
 
   document.querySelectorAll("[data-amount-widget]").forEach((widget) => {
     let initial = [];

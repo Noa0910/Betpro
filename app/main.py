@@ -11,6 +11,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request as StarletteRequest
 
+from jinja2 import pass_context
+
+from app.currencies import currency_choices, format_money as format_money_value
 from app import urls as U
 from app.auth import authenticate_user, check_admin_session, check_user_session, get_user_by_username, login_redirect, verify_password
 from app.config import CANONICAL_HOST, DB_EPHEMERAL, IS_VERCEL, USE_TURSO, get_session_secret, APP_VERSION
@@ -40,6 +43,7 @@ from app.services import (
     update_worker_fee,
     update_worker_status,
     update_admin_status,
+    update_user_currency,
 )
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -163,10 +167,11 @@ async def unhandled_error(request: StarletteRequest, exc: Exception):
     return HTMLResponse("Error interno del servidor", status_code=500)
 
 
-def fmt_money(value) -> str:
-    if value is None:
-        value = 0.0
-    return f"${float(value):,.2f}"
+@pass_context
+def fmt_money(context, value, currency=None):
+    if currency is None:
+        currency = context.get("currency")
+    return format_money_value(value, currency)
 
 
 templates.env.filters["money"] = fmt_money
@@ -174,6 +179,7 @@ templates.env.filters["tojson"] = lambda v: json.dumps(v)
 templates.env.globals["url"] = U
 templates.env.globals["app_version"] = APP_VERSION
 templates.env.globals["db_ephemeral"] = DB_EPHEMERAL
+templates.env.globals["currency_choices"] = currency_choices
 
 
 def build_cargues_items(report: dict) -> list[dict]:
@@ -218,6 +224,7 @@ def build_worker_panel_context(
         "user": user,
         "report": details,
         "report_date": report_date,
+        "currency": details.get("currency") or user.get("currency") or "USD",
         "history": get_user_reports(user["id"], limit=15),
         "cumulative": get_cumulative_total(user["id"]),
         "message": message,
@@ -467,6 +474,7 @@ async def admin_create_worker(
     password_confirm: str = Form(""),
     name: str = Form(...),
     retiro_fee: str = Form("50"),
+    currency: str = Form("USD"),
 ):
     _, auth_redirect = check_admin_session(request)
     if auth_redirect:
@@ -475,7 +483,7 @@ async def admin_create_worker(
     try:
         if password != password_confirm:
             raise ValueError("Las contraseñas no coinciden")
-        create_worker(username_clean, password, name, parse_amount(retiro_fee))
+        create_worker(username_clean, password, name, parse_amount(retiro_fee), currency)
     except ValueError as exc:
         return RedirectResponse(with_query(U.CLIENTES, error=str(exc)), status_code=303)
 
@@ -510,6 +518,7 @@ async def admin_create_admin(
     password: str = Form(...),
     password_confirm: str = Form(""),
     name: str = Form(...),
+    currency: str = Form("USD"),
 ):
     _, auth_redirect = check_admin_session(request)
     if auth_redirect:
@@ -517,7 +526,7 @@ async def admin_create_admin(
     try:
         if password != password_confirm:
             raise ValueError("Las contraseñas no coinciden")
-        create_admin(username, password, name)
+        create_admin(username, password, name, currency)
     except ValueError as exc:
         return RedirectResponse(
             with_query(U.ADMINISTRADORES, error=str(exc)),
@@ -563,6 +572,22 @@ async def admin_update_fee(
     return RedirectResponse(with_query(U.CLIENTES, msg="Tarifa actualizada"), status_code=303)
 
 
+@app.post("/clientes/{worker_id}/divisa")
+async def admin_update_currency(
+    request: Request,
+    worker_id: int,
+    currency: str = Form(...),
+):
+    _, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
+    try:
+        update_user_currency(worker_id, currency)
+    except ValueError as exc:
+        return RedirectResponse(with_query(U.CLIENTES, error=str(exc)), status_code=303)
+    return RedirectResponse(with_query(U.CLIENTES, msg="Divisa actualizada"), status_code=303)
+
+
 @app.post("/clientes/{worker_id}/estado")
 async def admin_toggle_worker(request: Request, worker_id: int, active: str = Form(...)):
     _, auth_redirect = check_admin_session(request)
@@ -602,6 +627,7 @@ async def admin_worker_detail(request: Request, worker_id: int, fecha: str | Non
     history = get_user_reports(worker_id, limit=30)
     cumulative = get_cumulative_total(worker_id)
     ctx = report_context(details)
+    display_currency = details.get("currency") or worker.get("currency") or "USD"
 
     return templates.TemplateResponse(
         "admin_worker_detail.html",
@@ -611,6 +637,7 @@ async def admin_worker_detail(request: Request, worker_id: int, fecha: str | Non
             "worker": worker,
             "report": details,
             "report_date": report_date,
+            "currency": display_currency,
             "history": history,
             "cumulative": cumulative,
             "can_confirm": details["status"] == REPORT_SUBMITTED and worker_id != user["id"],
@@ -747,6 +774,7 @@ async def admin_save_entries(
     report_date: str = Form(...),
     cargue_amount: list[str] = Form(default=[]),
     retiro_amount: list[str] = Form(default=[]),
+    currency: str = Form("USD"),
 ):
     _, auth_redirect = check_admin_session(request)
     if auth_redirect:
@@ -754,7 +782,7 @@ async def admin_save_entries(
 
     report = get_or_create_report(worker_id, report_date)
     try:
-        save_admin_entries(report["id"], cargue_amount, retiro_amount)
+        save_admin_entries(report["id"], cargue_amount, retiro_amount, currency)
     except ValueError as exc:
         return RedirectResponse(
             with_query(U.cliente(worker_id), fecha=report_date, error=str(exc)),

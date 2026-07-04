@@ -189,7 +189,36 @@ def db_session():
         conn.close()
 
 
+def _migrate_currency(conn) -> None:
+    user_cols = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+    if "currency" not in user_cols:
+        conn.execute(
+            "ALTER TABLE users ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD'"
+        )
+
+    report_cols = {row[1] for row in conn.execute("PRAGMA table_info(daily_reports)").fetchall()}
+    if "currency" not in report_cols:
+        conn.execute(
+            "ALTER TABLE daily_reports ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD'"
+        )
+
+    conn.execute(
+        """
+        UPDATE daily_reports
+        SET currency = COALESCE(
+            (SELECT currency FROM users u WHERE u.id = daily_reports.user_id),
+            'USD'
+        )
+        WHERE currency IS NULL OR currency = ''
+        """
+    )
+
+
 def _migrate(conn) -> None:
+    _migrate_currency(conn)
+    if USE_TURSO:
+        return
+
     report_cols = {row[1] for row in conn.execute("PRAGMA table_info(daily_reports)").fetchall()}
     if "status" not in report_cols:
         conn.execute(
@@ -253,6 +282,7 @@ def init_db() -> None:
                 name TEXT NOT NULL,
                 role TEXT NOT NULL CHECK(role IN ('admin', 'worker')),
                 retiro_fee REAL NOT NULL DEFAULT 50,
+                currency TEXT NOT NULL DEFAULT 'USD',
                 active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
@@ -262,6 +292,7 @@ def init_db() -> None:
                 user_id INTEGER NOT NULL,
                 report_date TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'draft',
+                currency TEXT NOT NULL DEFAULT 'USD',
                 notes TEXT,
                 submitted_at TEXT,
                 confirmed_at TEXT,
@@ -296,8 +327,7 @@ def init_db() -> None:
             );
             """
         )
-        if not USE_TURSO:
-            _migrate(conn)
+        _migrate(conn)
         _create_indexes(conn)
 
 
