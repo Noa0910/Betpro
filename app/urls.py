@@ -6,6 +6,7 @@ MIS_REPORTES = "/mis-reportes"
 REPORTES = "/reportes"
 CLIENTES = "/clientes"
 ADMINISTRADORES = "/administradores"
+DIVISA = "/divisa"
 
 
 def mis_reportes_guardar() -> str:
@@ -18,10 +19,6 @@ def cliente(worker_id: int) -> str:
 
 def cliente_tarifa(worker_id: int) -> str:
     return f"{CLIENTES}/{worker_id}/tarifa"
-
-
-def cliente_divisa(worker_id: int) -> str:
-    return f"{CLIENTES}/{worker_id}/divisa"
 
 
 def cliente_estado(worker_id: int) -> str:

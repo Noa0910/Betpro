@@ -1,9 +1,21 @@
 {% macro admin_nav(active) %}
-<nav class="admin-nav flex flex-wrap gap-2 mb-6">
+<nav class="admin-nav flex flex-wrap gap-2 mb-6 items-center">
   <a href="{{ url.REPORTES }}" class="admin-nav-link {% if active == 'reportes' %}active{% endif %}">Reportes</a>
   <a href="{{ url.MIS_REPORTES }}" class="admin-nav-link {% if active == 'mis-reportes' %}active{% endif %}">Mis reportes</a>
   <a href="{{ url.CLIENTES }}" class="admin-nav-link {% if active == 'clientes' %}active{% endif %}">Clientes</a>
   <a href="{{ url.ADMINISTRADORES }}" class="admin-nav-link {% if active == 'administradores' %}active{% endif %}">Administradores</a>
+  <form method="post" action="{{ url.DIVISA }}" class="flex flex-wrap items-center gap-2 ml-auto">
+    <input type="hidden" name="redirect_to" value="{{ request.url.path }}">
+    <label class="text-xs text-gray-400 whitespace-nowrap">Divisa global:</label>
+    <select name="currency" class="px-2 py-1.5 rounded-lg bg-black/40 border border-white/10 text-sm">
+      {% for code, label_text in currency_choices() %}
+      <option value="{{ code }}" {% if code == system_currency() %}selected{% endif %}>{{ code }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="text-xs px-3 py-1.5 rounded-lg bg-betpro-600 hover:bg-betpro-500 text-white whitespace-nowrap">
+      Aplicar a todos
+    </button>
+  </form>
 </nav>
 {% endmacro %}
 

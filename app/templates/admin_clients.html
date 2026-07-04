@@ -32,7 +32,6 @@
             <th class="pb-3 pr-4">Nombre</th>
             <th class="pb-3 pr-4">Usuario</th>
             <th class="pb-3 pr-4">Tarifa/retiro</th>
-            <th class="pb-3 pr-4">Divisa</th>
             <th class="pb-3 pr-4">Acumulado</th>
             <th class="pb-3 pr-4">Pendientes</th>
             <th class="pb-3 pr-4">Estado</th>
@@ -58,17 +57,7 @@
                 <button type="submit" class="text-xs text-betpro-400 hover:underline">Guardar</button>
               </form>
             </td>
-            <td class="py-4 pr-4">
-              <form method="post" action="{{ url.cliente_divisa(w.id) }}" class="flex gap-2 items-center">
-                <select name="currency" class="px-2 py-1 rounded bg-black/40 border border-white/10 text-sm">
-                  {% for code, label_text in currency_choices() %}
-                  <option value="{{ code }}" {% if code == w.currency %}selected{% endif %}>{{ code }}</option>
-                  {% endfor %}
-                </select>
-                <button type="submit" class="text-xs text-betpro-400 hover:underline">Guardar</button>
-              </form>
-            </td>
-            <td class="py-4 pr-4 font-semibold text-betpro-400 text-lg">{{ w.cumulative_total | money(w.currency) }}</td>
+            <td class="py-4 pr-4 font-semibold text-betpro-400 text-lg">{{ w.cumulative_total | money }}</td>
             <td class="py-4 pr-4">
               {% if w.pending_reports > 0 %}
               <span class="badge-pending">{{ w.pending_reports }} reporte(s)</span>
@@ -96,7 +85,7 @@
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="9" class="py-6 text-center text-gray-500">No hay cuentas registradas</td></tr>
+          <tr><td colspan="8" class="py-6 text-center text-gray-500">No hay cuentas registradas</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -121,7 +110,6 @@
         <span class="text-sm text-gray-400">Tarifa por retiro</span>
         <input type="number" step="0.01" name="retiro_fee" value="50" required class="input-field mt-1">
       </label>
-      {{ ui.currency_select('currency', 'USD', 'Divisa predeterminada') }}
       <div class="md:col-span-2">
         <button type="submit" class="btn-primary">Crear cliente</button>
       </div>

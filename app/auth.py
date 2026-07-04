@@ -43,14 +43,14 @@ def get_user_by_username(username: str) -> Optional[dict]:
 
 
 def session_user_payload(user: dict) -> dict:
-    from app.currencies import normalize_currency
+    from app.settings import get_system_currency
     return {
         "id": int(user["id"]),
         "username": user["username"],
         "name": user["name"],
         "role": user["role"],
         "retiro_fee": float(user.get("retiro_fee") or 0),
-        "currency": normalize_currency(user.get("currency")),
+        "currency": get_system_currency(),
     }
 
 

@@ -214,8 +214,23 @@ def _migrate_currency(conn) -> None:
     )
 
 
+def _migrate_app_settings(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO app_settings (key, value) VALUES ('currency', 'USD')"
+    )
+
+
 def _migrate(conn) -> None:
     _migrate_currency(conn)
+    _migrate_app_settings(conn)
     if USE_TURSO:
         return
 

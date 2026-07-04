@@ -3,6 +3,7 @@ from typing import Optional
 
 from app.currencies import DEFAULT_CURRENCY, normalize_currency
 from app.database import db_session
+from app.settings import get_system_currency
 
 REPORT_DRAFT = "draft"
 REPORT_SUBMITTED = "submitted"
@@ -61,11 +62,13 @@ def parse_report_date(value: str | None) -> str:
         return today_iso()
 
 
-def _user_currency(conn, user_id: int) -> str:
-    row = conn.execute("SELECT currency FROM users WHERE id = ?", (user_id,)).fetchone()
-    if not row:
-        return DEFAULT_CURRENCY
-    return normalize_currency(row["currency"])
+def _system_currency(conn) -> str:
+    row = conn.execute(
+        "SELECT value FROM app_settings WHERE key = 'currency'"
+    ).fetchone()
+    if row:
+        return normalize_currency(row["value"])
+    return DEFAULT_CURRENCY
 
 
 def get_or_create_report(user_id: int, report_date: str) -> dict:
@@ -81,10 +84,10 @@ def get_or_create_report(user_id: int, report_date: str) -> dict:
         ).fetchone()
         if row:
             data = dict(row)
-            data["currency"] = normalize_currency(data.get("currency") or _user_currency(conn, user_id))
+            data["currency"] = _system_currency(conn)
             return data
 
-        currency = _user_currency(conn, user_id)
+        currency = _system_currency(conn)
         try:
             cursor = conn.execute(
                 """
@@ -104,7 +107,7 @@ def get_or_create_report(user_id: int, report_date: str) -> dict:
             ).fetchone()
             if row:
                 data = dict(row)
-                data["currency"] = normalize_currency(data.get("currency") or currency)
+                data["currency"] = _system_currency(conn)
                 return data
             raise
 
@@ -151,7 +154,7 @@ def get_report_details(report_id: int) -> Optional[dict]:
         ).fetchall()
 
         data = dict(report)
-        data["currency"] = normalize_currency(data.get("currency"))
+        data["currency"] = get_system_currency()
         data["cargues"] = [dict(c) for c in cargues]
         data["retiros"] = [dict(r) for r in retiros]
         data["discounts"] = [dict(d) for d in discounts]
@@ -242,7 +245,7 @@ def _build_report_row(row, cargues_map, retiros_map, discounts_map) -> dict:
         data["user_id"] = _as_int(data["user_id"])
     if "retiro_fee" in data:
         data["retiro_fee"] = _as_float(data["retiro_fee"])
-    data["currency"] = normalize_currency(data.get("currency"))
+    data["currency"] = get_system_currency()
     data["cargues"] = cargues_map.get(rid, [])
     data["retiros"] = retiros_map.get(rid, [])
     data["discounts"] = discounts_map.get(rid, [])
@@ -438,7 +441,6 @@ def save_admin_entries(
     report_id: int,
     cargue_amounts: list[str],
     retiro_amounts: list[str],
-    currency: str | None = None,
 ) -> dict:
     details = get_report_details(report_id)
     if not details:
@@ -450,17 +452,12 @@ def save_admin_entries(
 
     cargues = parse_amounts_form(cargue_amounts)
     retiros = parse_amounts_form(retiro_amounts)
-    report_currency = normalize_currency(currency or details.get("currency"))
 
     with db_session() as conn:
         _write_report_entries(conn, report_id, cargues, retiros)
         conn.execute(
-            """
-            UPDATE daily_reports
-            SET currency = ?, updated_at = datetime('now')
-            WHERE id = ?
-            """,
-            (report_currency, report_id),
+            "UPDATE daily_reports SET updated_at = datetime('now') WHERE id = ?",
+            (report_id,),
         )
 
     return get_report_details(report_id)
@@ -603,7 +600,7 @@ def list_pending_reports(limit: int = 20) -> list[dict]:
             details = get_report_details(_as_int(row["id"]))
             item["summary"] = details["summary"] if details else dict(EMPTY_SUMMARY)
             if details:
-                item["currency"] = details.get("currency", DEFAULT_CURRENCY)
+                item["currency"] = get_system_currency()
             results.append(item)
         return results
 
@@ -639,14 +636,13 @@ def list_workers() -> list[dict]:
             worker = dict(row)
             wid = _as_int(worker["id"])
             worker["id"] = wid
-            worker["currency"] = normalize_currency(worker.get("currency"))
             worker["cumulative_total"] = cumulative_map.get(wid, 0.0)
             worker["pending_reports"] = count_pending_reports(wid)
             workers.append(worker)
         return workers
 
 
-def create_admin(username: str, password: str, name: str, currency: str = DEFAULT_CURRENCY) -> None:
+def create_admin(username: str, password: str, name: str) -> None:
     from app.auth import hash_password
 
     username = username.strip().lower()
@@ -667,7 +663,7 @@ def create_admin(username: str, password: str, name: str, currency: str = DEFAUL
             INSERT INTO users (username, password_hash, name, role, retiro_fee, currency)
             VALUES (?, ?, ?, 'admin', 50, ?)
             """,
-            (username, hash_password(password), name, normalize_currency(currency)),
+            (username, hash_password(password), name, get_system_currency()),
         )
 
 
@@ -703,7 +699,7 @@ def update_admin_status(admin_id: int, active: bool, actor_id: int) -> None:
 
 
 def create_worker(
-    username: str, password: str, name: str, retiro_fee: float, currency: str = DEFAULT_CURRENCY
+    username: str, password: str, name: str, retiro_fee: float
 ) -> None:
     from app.auth import hash_password
 
@@ -725,27 +721,7 @@ def create_worker(
             INSERT INTO users (username, password_hash, name, role, retiro_fee, currency)
             VALUES (?, ?, ?, 'worker', ?, ?)
             """,
-            (username, hash_password(password), name, retiro_fee, normalize_currency(currency)),
-        )
-
-
-def update_user_currency(user_id: int, currency: str) -> None:
-    code = normalize_currency(currency)
-    with db_session() as conn:
-        row = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
-        if not row:
-            raise ValueError("Usuario no encontrado")
-        conn.execute(
-            "UPDATE users SET currency = ? WHERE id = ?",
-            (code, user_id),
-        )
-        conn.execute(
-            """
-            UPDATE daily_reports
-            SET currency = ?
-            WHERE user_id = ? AND status = 'draft'
-            """,
-            (code, user_id),
+            (username, hash_password(password), name, retiro_fee, get_system_currency()),
         )
 
 
@@ -841,10 +817,9 @@ def _report_summary_row(
     total_discounts = round(float(discounts.get(rid, 0) or 0), 2)
     preview = round(total_retiros - total_cargues - total_fees - total_discounts, 2)
     confirmed = report["status"] == REPORT_CONFIRMED
-    currency = normalize_currency(report.get("currency"))
     return {
         **report,
-        "currency": currency,
+        "currency": get_system_currency(),
         "total_cargues": total_cargues,
         "total_retiros": total_retiros,
         "num_retiros": num_retiros,
@@ -876,18 +851,6 @@ def get_admin_analytics(period: str = "all") -> dict:
         "pending_estimated": round(sum(r["preview_total"] for r in submitted_period), 2),
     }
 
-    totals_by_currency: dict[str, dict] = {}
-    for r in confirmed_period:
-        cur = normalize_currency(r.get("currency"))
-        bucket = totals_by_currency.setdefault(
-            cur,
-            {"net_income": 0.0, "retiros": 0.0, "cargues": 0.0, "confirmed_reports": 0},
-        )
-        bucket["net_income"] = round(bucket["net_income"] + r["daily_total"], 2)
-        bucket["retiros"] = round(bucket["retiros"] + r["total_retiros"], 2)
-        bucket["cargues"] = round(bucket["cargues"] + r["total_cargues"], 2)
-        bucket["confirmed_reports"] += 1
-
     clients: dict[int, dict] = {}
     for r in enriched:
         uid = r["user_id"]
@@ -895,7 +858,6 @@ def get_admin_analytics(period: str = "all") -> dict:
             clients[uid] = {
                 "user_id": uid,
                 "name": r["user_name"],
-                "currency": normalize_currency(r.get("currency")),
                 "cumulative": 0.0,
                 "retiros": 0.0,
                 "cargues": 0.0,
@@ -971,8 +933,6 @@ def get_admin_analytics(period: str = "all") -> dict:
         "period": period,
         "period_label": period_labels.get(period, "Histórico total"),
         "totals": totals,
-        "totals_by_currency": totals_by_currency,
-        "mixed_currencies": len(totals_by_currency) > 1,
         "all_time_net": all_time_net,
         "clients_progress": progress,
         "daily_trend": daily_trend,
