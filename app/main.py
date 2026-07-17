@@ -13,6 +13,12 @@ from starlette.requests import Request as StarletteRequest
 
 from jinja2 import pass_context
 
+from app.client_expenses import (
+    add_client_expense,
+    delete_client_expense,
+    get_client_expense_totals,
+    list_client_expenses,
+)
 from app.currencies import currency_choices, format_money as format_money_value
 from app.weekly_billing import (
     MEXICO_EMPLOYEE_TARGET,
@@ -243,6 +249,13 @@ def billing_context(user_id: int) -> dict:
     return get_user_billing_summary(user_id, gross)
 
 
+def expenses_context(user_id: int) -> dict:
+    return {
+        "expenses": list_client_expenses(user_id),
+        "expense_totals": get_client_expense_totals(user_id),
+    }
+
+
 def build_worker_panel_context(
     user: dict,
     report_date: str,
@@ -267,6 +280,7 @@ def build_worker_panel_context(
         "cumulative": get_cumulative_total(user["id"]),
         "cumulative_subtitle": cumulative_subtitle(),
         "billing": billing_context(user["id"]),
+        **expenses_context(user["id"]),
         "message": message,
         "error": error,
         **ctx,
@@ -780,6 +794,7 @@ async def admin_worker_detail(request: Request, worker_id: int, fecha: str | Non
             "cumulative": cumulative,
             "cumulative_subtitle": cumulative_subtitle(),
             "billing": billing_context(worker_id),
+            **expenses_context(worker_id),
             "can_confirm": details["status"] == REPORT_SUBMITTED and worker_id != user["id"],
             "is_confirmed": details["status"] == REPORT_CONFIRMED,
             "can_reopen": details["status"] == REPORT_SUBMITTED and worker_id != user["id"],
@@ -795,6 +810,58 @@ async def admin_worker_detail(request: Request, worker_id: int, fecha: str | Non
             **ctx,
         },
     )
+
+
+@app.post("/clientes/{worker_id}/gastos")
+async def admin_add_client_expense(
+    request: Request,
+    worker_id: int,
+    description: str = Form(...),
+    amount: str = Form(...),
+    currency: str = Form("MXN"),
+    report_date: str = Form(""),
+):
+    admin, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
+
+    try:
+        add_client_expense(worker_id, description, amount, currency, admin["id"])
+    except ValueError as exc:
+        redirect = with_query(U.cliente(worker_id), error=str(exc))
+        if report_date.strip():
+            redirect = with_query(U.cliente(worker_id), fecha=report_date.strip(), error=str(exc))
+        return RedirectResponse(redirect, status_code=303)
+
+    redirect = with_query(U.cliente(worker_id), msg="Gasto registrado")
+    if report_date.strip():
+        redirect = with_query(U.cliente(worker_id), fecha=report_date.strip(), msg="Gasto registrado")
+    return RedirectResponse(redirect, status_code=303)
+
+
+@app.post("/clientes/{worker_id}/gastos/{expense_id}/eliminar")
+async def admin_delete_client_expense(
+    request: Request,
+    worker_id: int,
+    expense_id: int,
+    report_date: str = Form(""),
+):
+    _, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
+
+    try:
+        delete_client_expense(expense_id, worker_id)
+    except ValueError as exc:
+        redirect = with_query(U.cliente(worker_id), error=str(exc))
+        if report_date.strip():
+            redirect = with_query(U.cliente(worker_id), fecha=report_date.strip(), error=str(exc))
+        return RedirectResponse(redirect, status_code=303)
+
+    redirect = with_query(U.cliente(worker_id), msg="Gasto eliminado")
+    if report_date.strip():
+        redirect = with_query(U.cliente(worker_id), fecha=report_date.strip(), msg="Gasto eliminado")
+    return RedirectResponse(redirect, status_code=303)
 
 
 @app.post("/clientes/{worker_id}/descuentos")

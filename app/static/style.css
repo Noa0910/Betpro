@@ -782,6 +782,77 @@ body {
   color: #f87171;
 }
 
+.client-expenses-card {
+  border-color: rgba(251, 146, 60, 0.18);
+}
+
+.expense-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.expense-total-pill {
+  display: inline-flex;
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  background: rgba(251, 146, 60, 0.12);
+  color: #fdba74;
+  border: 1px solid rgba(251, 146, 60, 0.25);
+}
+
+.expense-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.expense-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.expense-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.expense-item-main strong {
+  display: block;
+}
+
+.expense-item-amount {
+  font-weight: 600;
+  color: #fdba74;
+  white-space: nowrap;
+}
+
+.expense-delete-form {
+  flex-shrink: 0;
+}
+
+.expense-add-form {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@media (min-width: 640px) {
+  .expense-add-form {
+    grid-template-columns: 2fr 1fr 1fr auto;
+    align-items: end;
+  }
+}
+
 .empty-hint {
   color: var(--bp-text-dim);
   font-size: 0.875rem;

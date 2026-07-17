@@ -288,11 +288,30 @@ def _migrate_mexico_pay(conn) -> None:
     conn.execute("UPDATE users SET retiro_fee = 0")
 
 
+def _migrate_client_expenses(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS client_expenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            description TEXT NOT NULL,
+            amount REAL NOT NULL,
+            currency TEXT NOT NULL DEFAULT 'MXN',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            created_by INTEGER,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY(created_by) REFERENCES users(id)
+        )
+        """
+    )
+
+
 def _migrate(conn) -> None:
     _migrate_currency(conn)
     _migrate_app_settings(conn)
     _migrate_cortes(conn)
     _migrate_mexico_pay(conn)
+    _migrate_client_expenses(conn)
     if USE_TURSO:
         return
 
@@ -344,6 +363,8 @@ def _create_indexes(conn) -> None:
             ON retiros(report_id);
         CREATE INDEX IF NOT EXISTS idx_discounts_report
             ON discounts(report_id);
+        CREATE INDEX IF NOT EXISTS idx_client_expenses_user
+            ON client_expenses(user_id);
         """
     )
 
@@ -439,6 +460,18 @@ def init_db() -> None:
                 paid_by INTEGER,
                 notes TEXT,
                 FOREIGN KEY(paid_by) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS client_expenses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                description TEXT NOT NULL,
+                amount REAL NOT NULL,
+                currency TEXT NOT NULL DEFAULT 'MXN',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                created_by INTEGER,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(created_by) REFERENCES users(id)
             );
             """
         )

@@ -40,6 +40,8 @@
   </p>
   {% endif %}
 
+  {{ ui.client_expenses_section(expenses, expense_totals, user.id, admin=false) }}
+
   <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
     <div>
       <h2 class="text-2xl font-bold">Reporte diario</h2>

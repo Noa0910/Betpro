@@ -31,6 +31,14 @@ def cliente_descuentos(worker_id: int) -> str:
     return f"{CLIENTES}/{worker_id}/descuentos"
 
 
+def cliente_gastos(worker_id: int) -> str:
+    return f"{CLIENTES}/{worker_id}/gastos"
+
+
+def cliente_gasto_eliminar(worker_id: int, expense_id: int) -> str:
+    return f"{CLIENTES}/{worker_id}/gastos/{expense_id}/eliminar"
+
+
 def cliente_confirmar(worker_id: int) -> str:
     return f"{CLIENTES}/{worker_id}/confirmar-reporte"
 

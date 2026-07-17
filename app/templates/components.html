@@ -159,6 +159,66 @@
 </div>
 {% endmacro %}
 
+{% macro client_expenses_section(expenses, expense_totals, worker_id, admin=false, report_date=none) %}
+<section class="card mb-8 client-expenses-card">
+  <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-4">
+    <div>
+      <h3 class="card-title mb-1">Gastos adicionales</h3>
+      <p class="text-sm text-gray-400">
+        Registro independiente del acumulado — no se descuenta del total de reportes.
+      </p>
+    </div>
+    <div class="expense-totals">
+      {% if expense_totals.COP > 0 %}
+      <span class="expense-total-pill">{{ expense_totals.COP | money('COP') }}</span>
+      {% endif %}
+      {% if expense_totals.MXN > 0 %}
+      <span class="expense-total-pill">{{ expense_totals.MXN | money('MXN') }}</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if expenses %}
+  <div class="expense-list mb-4">
+    {% for e in expenses %}
+    <div class="expense-item">
+      <div class="expense-item-main">
+        <strong>{{ e.description }}</strong>
+        <span class="text-xs text-gray-500">
+          {{ e.created_at[:10] if e.created_at else '' }}
+          {% if e.created_by_name %} · {{ e.created_by_name }}{% endif %}
+        </span>
+      </div>
+      <span class="expense-item-amount">{{ e.amount | money(e.currency) }}</span>
+      {% if admin %}
+      <form method="post" action="{{ url.cliente_gasto_eliminar(worker_id, e.id) }}" class="expense-delete-form">
+        {% if report_date %}<input type="hidden" name="report_date" value="{{ report_date }}">{% endif %}
+        <button type="submit" class="btn-remove" title="Eliminar gasto"
+          onclick="return confirm('¿Eliminar este gasto?')">&times;</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-sm text-gray-500 mb-4">Sin gastos registrados.</p>
+  {% endif %}
+
+  {% if admin %}
+  <form method="post" action="{{ url.cliente_gastos(worker_id) }}" class="expense-add-form">
+    {% if report_date %}<input type="hidden" name="report_date" value="{{ report_date }}">{% endif %}
+    <input type="text" name="description" required placeholder="Descripción (ej: Herramienta, viáticos…)" class="input-field">
+    <input type="number" step="0.01" min="0.01" name="amount" required placeholder="Monto" class="input-field">
+    <select name="currency" class="input-field" required>
+      <option value="MXN">MXN — Peso mexicano</option>
+      <option value="COP">COP — Peso colombiano</option>
+    </select>
+    <button type="submit" class="btn-secondary whitespace-nowrap">Agregar gasto</button>
+  </form>
+  {% endif %}
+</section>
+{% endmacro %}
+
 {% macro discount_widget_admin(discounts, locked=false) %}
 <div class="card" data-discount-widget data-initial="{{ discounts | tojson | forceescape }}" {% if locked %}data-locked="true"{% endif %}>
   <div class="amount-widget-header">
