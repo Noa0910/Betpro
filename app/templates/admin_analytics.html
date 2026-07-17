@@ -53,11 +53,8 @@
       <p class="dash-hero-label">Ingreso neto confirmado ({{ analytics.period_label | lower }})</p>
       <p class="dash-hero-value">{{ analytics.totals.net_income | money }}</p>
       <p class="dash-hero-sub">
-        {% if analytics.corte_cutoff %}
-        Total del periodo actual: {{ analytics.period_net | money }}
-        {% else %}
-        Total confirmado: {{ analytics.period_net | money }}
-        {% endif %}
+        Bruto confirmado: {{ analytics.totals.gross_income | money }}
+        · Cuotas descontadas: − {{ analytics.totals.quota_deductions | money }}
       </p>
     </div>
     <div class="dash-hero-stats">
@@ -207,7 +204,7 @@
   <div class="grid lg:grid-cols-2 gap-8 mb-10">
     <section class="card">
       <h3 class="card-title mb-1">Ingreso neto — periodo actual</h3>
-      <p class="text-sm text-gray-400 mb-6">Solo reportes confirmados del corte en curso</p>
+      <p class="text-sm text-gray-400 mb-6">Confirmado menos cuotas (86/578 transición o $500÷6 días lab.)</p>
       <div class="trend-chart">
         {% for day in analytics.daily_trend %}
         <div class="trend-col" title="{{ day.date }}: {{ day.net | money }}">

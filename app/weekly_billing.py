@@ -181,6 +181,27 @@ def get_user_weeks_batch(user_ids: list[int]) -> dict[int, list[str]]:
     return result
 
 
+def get_deductions_for_user_dates_batch(user_dates: dict[int, list[str]]) -> float:
+    """Suma cuotas aplicables a fechas concretas de reporte confirmado."""
+    if not user_dates:
+        return 0.0
+    total = 0.0
+    with db_session() as conn:
+        for uid, dates in user_dates.items():
+            if not dates:
+                continue
+            row = conn.execute(
+                "SELECT username, role FROM users WHERE id = ?",
+                (uid,),
+            ).fetchone()
+            if not row:
+                continue
+            total += calculate_user_deduction(
+                row["username"], row["role"], dates
+            )["deduction"]
+    return round(total, 2)
+
+
 def get_weekly_deductions_batch(user_ids: list[int]) -> dict[int, float]:
     details = get_user_deduction_details_batch(user_ids)
     return {uid: details.get(uid, {}).get("deduction", 0.0) for uid in user_ids}

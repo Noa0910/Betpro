@@ -8,6 +8,8 @@ from app.settings import get_system_currency
 from app.weekly_billing import (
     WEEKLY_DEDUCTION,
     apply_weekly_deductions,
+    calculate_user_deduction,
+    get_deductions_for_user_dates_batch,
     get_user_deduction_details_batch,
     get_weekly_deductions_batch,
 )
@@ -896,12 +898,21 @@ def get_admin_analytics(period: str = "all") -> dict:
     confirmed_period = [r for r in period_reports if r["status"] == REPORT_CONFIRMED]
     submitted_period = [r for r in period_reports if r["status"] == REPORT_SUBMITTED]
 
+    period_user_dates: dict[int, list[str]] = {}
+    for r in confirmed_period:
+        uid = r["user_id"]
+        period_user_dates.setdefault(uid, []).append(r["report_date"])
+    period_quota = get_deductions_for_user_dates_batch(period_user_dates)
+    gross_income = round(sum(r["daily_total"] for r in confirmed_period), 2)
+
     totals = {
-        "net_income": round(sum(r["daily_total"] for r in confirmed_period), 2),
+        "gross_income": gross_income,
+        "net_income": round(gross_income - period_quota, 2),
+        "quota_deductions": period_quota,
         "retiros": round(sum(r["total_retiros"] for r in confirmed_period), 2),
         "cargues": round(sum(r["total_cargues"] for r in confirmed_period), 2),
         "fees": 0.0,
-        "weekly_deductions": 0.0,
+        "weekly_deductions": period_quota,
         "discounts": round(sum(r["total_discounts"] for r in confirmed_period), 2),
         "retiro_count": sum(r["num_retiros"] for r in confirmed_period),
         "confirmed_reports": len(confirmed_period),
@@ -942,7 +953,8 @@ def get_admin_analytics(period: str = "all") -> dict:
     user_ids = [c["user_id"] for c in progress]
     deductions_map = get_weekly_deductions_batch(user_ids)
     deduction_details = get_user_deduction_details_batch(user_ids)
-    totals["weekly_deductions"] = round(sum(deductions_map.values()), 2)
+    total_quota_all = round(sum(deductions_map.values()), 2)
+    totals["weekly_deductions"] = total_quota_all if period == "all" else totals["quota_deductions"]
 
     max_cumulative = 0.0
     for c in progress:
@@ -982,11 +994,25 @@ def get_admin_analytics(period: str = "all") -> dict:
         trend_map[iso] = {"date": iso, "net": 0.0, "retiros": 0.0, "cargues": 0.0}
         d += timedelta(days=1)
 
+    user_meta: dict[int, dict] = {}
+    with db_session() as conn:
+        for row in conn.execute(
+            "SELECT id, username, role FROM users WHERE role IN ('worker', 'admin')"
+        ).fetchall():
+            user_meta[_as_int(row["id"])] = dict(row)
+
     for r in enriched:
         if r["status"] != REPORT_CONFIRMED:
             continue
         if r["report_date"] in trend_map:
-            trend_map[r["report_date"]]["net"] += r["daily_total"]
+            uid = r["user_id"]
+            meta = user_meta.get(uid, {})
+            day_quota = calculate_user_deduction(
+                meta.get("username", ""),
+                meta.get("role", "worker"),
+                [r["report_date"]],
+            )["deduction"]
+            trend_map[r["report_date"]]["net"] += r["daily_total"] - day_quota
             trend_map[r["report_date"]]["retiros"] += r["total_retiros"]
             trend_map[r["report_date"]]["cargues"] += r["total_cargues"]
 
@@ -1014,15 +1040,17 @@ def get_admin_analytics(period: str = "all") -> dict:
     if period == "all" and corte_since:
         period_label = f"Periodo actual (desde {corte_since})"
 
-    period_net = round(
+    gross_period = round(
         sum(r["daily_total"] for r in enriched if r["status"] == REPORT_CONFIRMED), 2
     )
+    period_net = round(gross_period - total_quota_all, 2)
 
     return {
         "period": period,
         "period_label": period_label,
         "totals": totals,
         "period_net": period_net,
+        "gross_period": gross_period,
         "all_time_net": period_net,
         "clients_progress": progress,
         "daily_trend": daily_trend,
