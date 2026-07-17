@@ -103,21 +103,25 @@
   {% endif %}
 
   <section>
-    <h3 class="text-xl font-bold mb-4">Historial de cortes</h3>
+    <h3 class="text-xl font-bold mb-2">Historial de cortes</h3>
+    <p class="text-gray-400 mb-4 text-sm">Todos los cortes aceptados quedan guardados con el total de cada periodo y el desglose por cliente.</p>
     <div class="card overflow-x-auto">
       <table class="w-full text-sm">
         <thead>
           <tr class="text-left text-gray-400 border-b border-white/10">
             <th class="pb-3 pr-4">Periodo</th>
             <th class="pb-3 pr-4">Estado</th>
+            <th class="pb-3 pr-4">Total periodo</th>
+            <th class="pb-3 pr-4">Clientes</th>
             <th class="pb-3 pr-4">Aceptado</th>
-            <th class="pb-3">Por</th>
+            <th class="pb-3 pr-4">Por</th>
+            <th class="pb-3">Detalle</th>
           </tr>
         </thead>
         <tbody>
           {% for c in cortes_history %}
-          <tr class="border-b border-white/5">
-            <td class="py-3 pr-4">{{ c.period_label }}</td>
+          <tr class="border-b border-white/5 hover:bg-white/5">
+            <td class="py-3 pr-4 font-medium">{{ c.period_label }}</td>
             <td class="py-3 pr-4">
               {% if c.status == 'accepted' %}
               <span class="badge-confirmed">Aceptado</span>
@@ -125,11 +129,22 @@
               <span class="badge-pending">Pendiente</span>
               {% endif %}
             </td>
+            <td class="py-3 pr-4 font-semibold text-betpro-400">
+              {% if c.status == 'accepted' %}
+                {{ c.total_net | money }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td class="py-3 pr-4">{{ c.total_clients if c.status == 'accepted' else '—' }}</td>
             <td class="py-3 pr-4">{{ c.accepted_at[:16] if c.accepted_at else '—' }}</td>
-            <td class="py-3">{{ c.accepted_by_name or '—' }}</td>
+            <td class="py-3 pr-4">{{ c.accepted_by_name or '—' }}</td>
+            <td class="py-3">
+              <a href="{{ url.corte_detalle(c.id) }}" class="text-betpro-400 hover:underline">Ver →</a>
+            </td>
           </tr>
           {% else %}
-          <tr><td colspan="4" class="py-6 text-center text-gray-500">Sin cortes registrados</td></tr>
+          <tr><td colspan="7" class="py-6 text-center text-gray-500">Sin cortes registrados</td></tr>
           {% endfor %}
         </tbody>
       </table>

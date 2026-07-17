@@ -49,6 +49,7 @@ from app.cortes import (
     accept_corte,
     build_corte_preview,
     ensure_pending_corte,
+    get_corte_detail,
     get_last_accepted_corte,
     get_pending_corte,
     list_cortes,
@@ -482,6 +483,30 @@ async def admin_cortes_page(request: Request):
             "preview": preview or {"clients": [], "total_net": 0, "total_clients": 0, "submitted_pending": 0},
             "last_accepted": get_last_accepted_corte(),
             "cortes_history": list_cortes(),
+            "message": request.query_params.get("msg"),
+            "error": request.query_params.get("error"),
+        },
+    )
+
+
+@app.get("/cortes/{corte_id}", response_class=HTMLResponse)
+async def admin_corte_detail(request: Request, corte_id: int):
+    user, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
+
+    detail = get_corte_detail(corte_id)
+    if not detail:
+        return RedirectResponse(with_query(U.CORTES, error="Corte no encontrado"), status_code=303)
+
+    return templates.TemplateResponse(
+        "admin_corte_detail.html",
+        {
+            "request": request,
+            "user": user,
+            "detail": detail,
+            "corte": detail["corte"],
+            "snapshots": detail["snapshots"],
             "message": request.query_params.get("msg"),
             "error": request.query_params.get("error"),
         },

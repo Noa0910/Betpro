@@ -82,6 +82,8 @@ def get_last_accepted_corte() -> dict | None:
 
 def _enrich_corte(corte: dict) -> dict:
     corte["period_label"] = format_period_label(corte["period_start"], corte["period_end"])
+    corte["total_net"] = round(_as_float(corte.get("total_net")), 2)
+    corte["total_clients"] = _as_int(corte.get("total_clients") or 0)
     return corte
 
 
@@ -107,7 +109,65 @@ def get_corte_cutoff_date() -> str | None:
     return last["period_end"]
 
 
-def list_cortes(limit: int = 20) -> list[dict]:
+def get_corte_by_id(corte_id: int) -> dict | None:
+    with db_session() as conn:
+        row = conn.execute(
+            """
+            SELECT c.*, u.name AS accepted_by_name
+            FROM cortes c
+            LEFT JOIN users u ON u.id = c.accepted_by
+            WHERE c.id = ?
+            """,
+            (corte_id,),
+        ).fetchone()
+        return _enrich_corte(dict(row)) if row else None
+
+
+def get_corte_snapshots(corte_id: int) -> list[dict]:
+    with db_session() as conn:
+        rows = conn.execute(
+            """
+            SELECT s.id, s.corte_id, s.user_id,
+                   COALESCE(NULLIF(s.user_name, ''), u.name) AS user_name,
+                   s.confirmed_days, s.cumulative_at_corte,
+                   u.username, u.role
+            FROM corte_snapshots s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.corte_id = ?
+            ORDER BY s.cumulative_at_corte DESC, user_name
+            """,
+            (corte_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_corte_detail(corte_id: int) -> dict | None:
+    corte = get_corte_by_id(corte_id)
+    if not corte:
+        return None
+    snapshots = get_corte_snapshots(corte_id)
+    if corte["status"] == CORTE_PENDING and not snapshots:
+        preview = build_corte_preview(corte)
+        snapshots = [
+            {
+                "user_id": c["user_id"],
+                "user_name": c["name"],
+                "username": c["username"],
+                "role": c["role"],
+                "confirmed_days": c["confirmed_days"],
+                "cumulative_at_corte": c["total"],
+            }
+            for c in preview["clients"]
+        ]
+        total_net = preview["total_net"]
+    else:
+        total_net = corte["total_net"] if corte["status"] == CORTE_ACCEPTED else round(
+            sum(_as_float(s.get("cumulative_at_corte")) for s in snapshots), 2
+        )
+    return {"corte": corte, "snapshots": snapshots, "total_net": total_net}
+
+
+def list_cortes(limit: int = 100) -> list[dict]:
     with db_session() as conn:
         rows = conn.execute(
             """
@@ -277,17 +337,34 @@ def accept_corte(corte_id: int, admin_id: int) -> None:
         for client in preview["clients"]:
             conn.execute(
                 """
-                INSERT INTO corte_snapshots (corte_id, user_id, cumulative_at_corte)
-                VALUES (?, ?, ?)
+                INSERT INTO corte_snapshots
+                    (corte_id, user_id, user_name, confirmed_days, cumulative_at_corte)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (corte_id, client["user_id"], client["total"]),
+                (
+                    corte_id,
+                    client["user_id"],
+                    client["name"],
+                    client["confirmed_days"],
+                    client["total"],
+                ),
             )
 
         conn.execute(
             """
             UPDATE cortes
-            SET status = ?, accepted_at = datetime('now'), accepted_by = ?
+            SET status = ?,
+                accepted_at = datetime('now'),
+                accepted_by = ?,
+                total_net = ?,
+                total_clients = ?
             WHERE id = ?
             """,
-            (CORTE_ACCEPTED, admin_id, corte_id),
+            (
+                CORTE_ACCEPTED,
+                admin_id,
+                preview["total_net"],
+                preview["total_clients"],
+                corte_id,
+            ),
         )

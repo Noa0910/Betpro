@@ -52,3 +52,7 @@ def admin_estado(admin_id: int) -> str:
 
 def corte_aceptar(corte_id: int) -> str:
     return f"{CORTES}/{corte_id}/aceptar"
+
+
+def corte_detalle(corte_id: int) -> str:
+    return f"{CORTES}/{corte_id}"

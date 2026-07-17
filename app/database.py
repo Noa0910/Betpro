@@ -236,6 +236,8 @@ def _migrate_cortes(conn) -> None:
             period_start TEXT NOT NULL,
             period_end TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'pending',
+            total_net REAL NOT NULL DEFAULT 0,
+            total_clients INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             accepted_at TEXT,
             accepted_by INTEGER,
@@ -250,12 +252,24 @@ def _migrate_cortes(conn) -> None:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             corte_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
+            user_name TEXT NOT NULL,
+            confirmed_days INTEGER NOT NULL DEFAULT 0,
             cumulative_at_corte REAL NOT NULL,
             FOREIGN KEY(corte_id) REFERENCES cortes(id) ON DELETE CASCADE,
             FOREIGN KEY(user_id) REFERENCES users(id)
         )
         """
     )
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(cortes)").fetchall()}
+    if "total_net" not in cols:
+        conn.execute("ALTER TABLE cortes ADD COLUMN total_net REAL NOT NULL DEFAULT 0")
+    if "total_clients" not in cols:
+        conn.execute("ALTER TABLE cortes ADD COLUMN total_clients INTEGER NOT NULL DEFAULT 0")
+    snap_cols = {row[1] for row in conn.execute("PRAGMA table_info(corte_snapshots)").fetchall()}
+    if snap_cols and "user_name" not in snap_cols:
+        conn.execute("ALTER TABLE corte_snapshots ADD COLUMN user_name TEXT NOT NULL DEFAULT ''")
+    if snap_cols and "confirmed_days" not in snap_cols:
+        conn.execute("ALTER TABLE corte_snapshots ADD COLUMN confirmed_days INTEGER NOT NULL DEFAULT 0")
 
 
 def _migrate(conn) -> None:
@@ -382,6 +396,8 @@ def init_db() -> None:
                 period_start TEXT NOT NULL,
                 period_end TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'pending',
+                total_net REAL NOT NULL DEFAULT 0,
+                total_clients INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 accepted_at TEXT,
                 accepted_by INTEGER,
@@ -393,6 +409,8 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 corte_id INTEGER NOT NULL,
                 user_id INTEGER NOT NULL,
+                user_name TEXT NOT NULL,
+                confirmed_days INTEGER NOT NULL DEFAULT 0,
                 cumulative_at_corte REAL NOT NULL,
                 FOREIGN KEY(corte_id) REFERENCES cortes(id) ON DELETE CASCADE,
                 FOREIGN KEY(user_id) REFERENCES users(id)
