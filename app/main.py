@@ -45,6 +45,14 @@ from app.services import (
     update_admin_status,
 )
 from app.settings import get_system_currency, set_system_currency
+from app.cortes import (
+    accept_corte,
+    build_corte_preview,
+    ensure_pending_corte,
+    get_last_accepted_corte,
+    get_pending_corte,
+    list_cortes,
+)
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR.parent / "public" / "static"
@@ -211,6 +219,14 @@ def report_context(report: dict) -> dict:
     }
 
 
+def cumulative_subtitle() -> str:
+    last = get_last_accepted_corte()
+    if last:
+        pe = last["period_end"]
+        return f"Periodo actual — desde {pe[8:10]}/{pe[5:7]}/{pe[:4]}"
+    return "Suma de días confirmados del periodo actual"
+
+
 def build_worker_panel_context(
     user: dict,
     report_date: str,
@@ -233,6 +249,7 @@ def build_worker_panel_context(
         "currency": get_system_currency(),
         "history": get_user_reports(user["id"], limit=15),
         "cumulative": get_cumulative_total(user["id"]),
+        "cumulative_subtitle": cumulative_subtitle(),
         "message": message,
         "error": error,
         **ctx,
@@ -421,8 +438,10 @@ async def admin_dashboard(request: Request, period: str = "all"):
         period = "all"
 
     try:
+        ensure_pending_corte()
         analytics = get_admin_analytics(period)
         pending = list_pending_reports()
+        pending_corte = get_pending_corte()
     except Exception:
         return RedirectResponse(
             with_query(U.REPORTES, error="No se pudo cargar el dashboard. Intenta de nuevo."),
@@ -436,10 +455,51 @@ async def admin_dashboard(request: Request, period: str = "all"):
             "user": user,
             "analytics": analytics,
             "pending_reports": pending,
+            "pending_corte": pending_corte,
             "period": period,
             "message": request.query_params.get("msg"),
             "error": request.query_params.get("error"),
         },
+    )
+
+
+@app.get(U.CORTES, response_class=HTMLResponse)
+async def admin_cortes_page(request: Request):
+    user, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
+
+    ensure_pending_corte()
+    pending_corte = get_pending_corte()
+    preview = build_corte_preview(pending_corte) if pending_corte else None
+
+    return templates.TemplateResponse(
+        "admin_cortes.html",
+        {
+            "request": request,
+            "user": user,
+            "pending_corte": pending_corte,
+            "preview": preview or {"clients": [], "total_net": 0, "total_clients": 0, "submitted_pending": 0},
+            "last_accepted": get_last_accepted_corte(),
+            "cortes_history": list_cortes(),
+            "message": request.query_params.get("msg"),
+            "error": request.query_params.get("error"),
+        },
+    )
+
+
+@app.post("/cortes/{corte_id}/aceptar")
+async def admin_accept_corte(request: Request, corte_id: int):
+    user, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
+    try:
+        accept_corte(corte_id, user["id"])
+    except ValueError as exc:
+        return RedirectResponse(with_query(U.CORTES, error=str(exc)), status_code=303)
+    return RedirectResponse(
+        with_query(U.CORTES, msg="Corte aceptado. Todos los acumulados reiniciaron en 0."),
+        status_code=303,
     )
 
 
@@ -647,6 +707,7 @@ async def admin_worker_detail(request: Request, worker_id: int, fecha: str | Non
             "currency": get_system_currency(),
             "history": history,
             "cumulative": cumulative,
+            "cumulative_subtitle": cumulative_subtitle(),
             "can_confirm": details["status"] == REPORT_SUBMITTED and worker_id != user["id"],
             "is_confirmed": details["status"] == REPORT_CONFIRMED,
             "can_reopen": details["status"] == REPORT_SUBMITTED and worker_id != user["id"],

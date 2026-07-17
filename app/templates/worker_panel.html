@@ -27,7 +27,7 @@
 
   {{ ui.cumulative_banner(
     cumulative,
-    "Suma de todos los días confirmados",
+    cumulative_subtitle,
     report.summary.daily_total if report.summary.is_confirmed else report.summary.preview_total
   ) }}
 

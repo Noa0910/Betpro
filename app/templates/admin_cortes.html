@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% import "components.html" as ui %}
+{% block title %}Cortes quincenales - BetPro{% endblock %}
+{% block body %}
+<header class="app-header sticky top-0 z-10">
+  <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    {{ ui.brand_header(user.name) }}
+    {{ ui.admin_nav('cortes', request.url.path) }}
+    <a href="{{ url.SALIR }}" class="text-sm text-gray-400 hover:text-white sm:ml-auto">Salir</a>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 py-8">
+  {% if message %}
+  <div class="mb-6 p-4 rounded-xl alert-success">{{ message }}</div>
+  {% endif %}
+  {% if error %}
+  <div class="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300">{{ error }}</div>
+  {% endif %}
+
+  <div class="mb-8">
+    <h2 class="text-3xl font-bold">Cortes quincenales</h2>
+    <p class="text-gray-400 mt-1">
+      Cada <strong>1 y 15</strong> de mes (y fin de mes) se cierra un periodo.
+      Al <strong>aceptar el corte</strong>, los acumulados de todos vuelven a <strong>0</strong> y empiezan reportes nuevos.
+    </p>
+  </div>
+
+  {% if pending_corte %}
+  <section class="card mb-10 border border-amber-500/40">
+    <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-6 mb-6">
+      <div>
+        <span class="badge-pending mb-2 inline-block">Corte pendiente</span>
+        <h3 class="text-xl font-bold">Periodo {{ pending_corte.period_label }}</h3>
+        <p class="text-sm text-gray-400 mt-1">
+          Revisa los totales confirmados. Al aceptar, este periodo queda liquidado y todos empiezan en cero.
+        </p>
+        {% if preview.submitted_pending > 0 %}
+        <p class="text-sm text-amber-300 mt-3">
+          ⚠ Hay {{ preview.submitted_pending }} reporte(s) enviados sin confirmar en este periodo.
+          Confírmalos antes de aceptar el corte.
+        </p>
+        {% endif %}
+      </div>
+      <div class="stat-box text-center min-w-[180px]">
+        <span class="stat-label">Total del periodo</span>
+        <span class="stat-value text-2xl text-betpro-400">{{ preview.total_net | money }}</span>
+        <span class="text-xs text-gray-500">{{ preview.total_clients }} cliente(s)</span>
+      </div>
+    </div>
+
+    {% if preview.clients %}
+    <div class="overflow-x-auto mb-6">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-gray-400 border-b border-white/10">
+            <th class="pb-3 pr-4">Cliente</th>
+            <th class="pb-3 pr-4">Días conf.</th>
+            <th class="pb-3">Total periodo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in preview.clients %}
+          <tr class="border-b border-white/5">
+            <td class="py-3 pr-4 font-medium">{{ c.name }}</td>
+            <td class="py-3 pr-4">{{ c.confirmed_days }}</td>
+            <td class="py-3 font-semibold text-betpro-400">{{ c.total | money }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-gray-500 mb-6">No hay reportes confirmados en este periodo. Puedes aceptar el corte igualmente para reiniciar contadores.</p>
+    {% endif %}
+
+    <form method="post" action="{{ url.corte_aceptar(pending_corte.id) }}"
+      onsubmit="return confirm('¿Aceptar el corte del periodo {{ pending_corte.period_label }}?\\n\\nTodos los acumulados volverán a 0 y empezará un nuevo periodo.');">
+      <button type="submit" class="btn-primary" {% if preview.submitted_pending > 0 %}disabled{% endif %}>
+        Aceptar corte — reiniciar acumulados a 0
+      </button>
+    </form>
+  </section>
+  {% else %}
+  <div class="card mb-10">
+    <p class="text-gray-400">No hay corte pendiente en este momento.</p>
+    {% if last_accepted %}
+    <p class="text-sm text-gray-500 mt-2">
+      Último corte aceptado: <strong class="text-gray-300">{{ last_accepted.period_label }}</strong>
+      el {{ last_accepted.accepted_at[:10] if last_accepted.accepted_at else '—' }}
+    </p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if last_accepted and not pending_corte %}
+  <div class="card mb-10 stat-box-highlight">
+    <p class="text-betpro-400">
+      Periodo actual: reportes desde el {{ last_accepted.period_end[8:10] }}/{{ last_accepted.period_end[5:7] }}/{{ last_accepted.period_end[:4] }} en adelante.
+      Los acumulados muestran solo este tramo.
+    </p>
+  </div>
+  {% endif %}
+
+  <section>
+    <h3 class="text-xl font-bold mb-4">Historial de cortes</h3>
+    <div class="card overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-gray-400 border-b border-white/10">
+            <th class="pb-3 pr-4">Periodo</th>
+            <th class="pb-3 pr-4">Estado</th>
+            <th class="pb-3 pr-4">Aceptado</th>
+            <th class="pb-3">Por</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in cortes_history %}
+          <tr class="border-b border-white/5">
+            <td class="py-3 pr-4">{{ c.period_label }}</td>
+            <td class="py-3 pr-4">
+              {% if c.status == 'accepted' %}
+              <span class="badge-confirmed">Aceptado</span>
+              {% else %}
+              <span class="badge-pending">Pendiente</span>
+              {% endif %}
+            </td>
+            <td class="py-3 pr-4">{{ c.accepted_at[:16] if c.accepted_at else '—' }}</td>
+            <td class="py-3">{{ c.accepted_by_name or '—' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="py-6 text-center text-gray-500">Sin cortes registrados</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+{% endblock %}

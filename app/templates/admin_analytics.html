@@ -20,6 +20,16 @@
 
   {{ ui.db_persistence_warning() }}
 
+  {% if pending_corte %}
+  <div class="mb-6 p-4 rounded-xl alert-warning flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div>
+      <strong>Corte quincenal pendiente</strong> — periodo {{ pending_corte.period_label }}.
+      Al aceptarlo, los acumulados de todos vuelven a 0.
+    </div>
+    <a href="{{ url.CORTES }}" class="btn-primary text-sm whitespace-nowrap">Revisar y aceptar corte →</a>
+  </div>
+  {% endif %}
+
   <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-8">
     <div>
       <h2 class="text-3xl font-bold">Dashboard general</h2>

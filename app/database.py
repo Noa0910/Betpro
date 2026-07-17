@@ -228,9 +228,40 @@ def _migrate_app_settings(conn) -> None:
     )
 
 
+def _migrate_cortes(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS cortes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            period_start TEXT NOT NULL,
+            period_end TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            accepted_at TEXT,
+            accepted_by INTEGER,
+            notes TEXT,
+            FOREIGN KEY(accepted_by) REFERENCES users(id)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS corte_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            corte_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            cumulative_at_corte REAL NOT NULL,
+            FOREIGN KEY(corte_id) REFERENCES cortes(id) ON DELETE CASCADE,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+        """
+    )
+
+
 def _migrate(conn) -> None:
     _migrate_currency(conn)
     _migrate_app_settings(conn)
+    _migrate_cortes(conn)
     if USE_TURSO:
         return
 
@@ -344,6 +375,27 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS app_settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS cortes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                period_start TEXT NOT NULL,
+                period_end TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                accepted_at TEXT,
+                accepted_by INTEGER,
+                notes TEXT,
+                FOREIGN KEY(accepted_by) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS corte_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                corte_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                cumulative_at_corte REAL NOT NULL,
+                FOREIGN KEY(corte_id) REFERENCES cortes(id) ON DELETE CASCADE,
+                FOREIGN KEY(user_id) REFERENCES users(id)
             );
             """
         )

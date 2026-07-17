@@ -6,6 +6,7 @@ MIS_REPORTES = "/mis-reportes"
 REPORTES = "/reportes"
 CLIENTES = "/clientes"
 ADMINISTRADORES = "/administradores"
+CORTES = "/cortes"
 DIVISA = "/divisa"
 
 
@@ -47,3 +48,7 @@ def cliente_cambiar_fecha(worker_id: int) -> str:
 
 def admin_estado(admin_id: int) -> str:
     return f"{ADMINISTRADORES}/{admin_id}/estado"
+
+
+def corte_aceptar(corte_id: int) -> str:
+    return f"{CORTES}/{corte_id}/aceptar"

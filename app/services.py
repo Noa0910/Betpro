@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from typing import Optional
 
+from app.cortes import get_corte_cutoff_date
 from app.currencies import DEFAULT_CURRENCY, normalize_currency
 from app.database import db_session
 from app.settings import get_system_currency
@@ -256,11 +257,19 @@ def _build_report_row(row, cargues_map, retiros_map, discounts_map) -> dict:
     return data
 
 
+def _corte_sql_extra(alias: str = "dr") -> tuple[str, list]:
+    cutoff = get_corte_cutoff_date()
+    if cutoff:
+        return f" AND {alias}.report_date > ?", [cutoff]
+    return "", []
+
+
 def get_cumulative_totals_batch(user_ids: list[int]) -> dict[int, float]:
     if not user_ids:
         return {}
 
     totals = {_as_int(uid): 0.0 for uid in user_ids}
+    corte_sql, corte_params = _corte_sql_extra("dr")
     with db_session() as conn:
         placeholders = ",".join("?" * len(user_ids))
         rows = conn.execute(
@@ -269,9 +278,10 @@ def get_cumulative_totals_batch(user_ids: list[int]) -> dict[int, float]:
             FROM daily_reports dr
             JOIN users u ON u.id = dr.user_id
             WHERE dr.user_id IN ({placeholders}) AND dr.status = 'confirmed'
+            {corte_sql}
             ORDER BY dr.user_id, dr.report_date
             """,
-            tuple(user_ids),
+            tuple(user_ids) + tuple(corte_params),
         ).fetchall()
         if not rows:
             return totals
@@ -306,10 +316,13 @@ def get_user_reports(user_id: int, limit: int = 30) -> list[dict]:
         cargues_map, retiros_map, discounts_map = _load_report_children(conn, report_ids)
 
     cumulative = 0.0
+    cutoff = get_corte_cutoff_date()
     reports = []
     for row in reversed(rows):
         details = _build_report_row(row, cargues_map, retiros_map, discounts_map)
-        cumulative += details["summary"]["daily_total"]
+        if details["status"] == REPORT_CONFIRMED:
+            if not cutoff or details["report_date"] > cutoff:
+                cumulative += details["summary"]["daily_total"]
         details["cumulative_total"] = round(cumulative, 2)
         reports.append(details)
 
@@ -869,12 +882,15 @@ def get_admin_analytics(period: str = "all") -> dict:
             }
         c = clients[uid]
         if r["status"] == REPORT_CONFIRMED:
-            c["cumulative"] += r["daily_total"]
-            c["retiros"] += r["total_retiros"]
-            c["cargues"] += r["total_cargues"]
-            c["fees"] += r["total_fees"]
-            c["retiro_count"] += r["num_retiros"]
-            c["confirmed_days"] += 1
+            cutoff = get_corte_cutoff_date()
+            in_period = not cutoff or r["report_date"] > cutoff
+            if in_period:
+                c["cumulative"] += r["daily_total"]
+                c["retiros"] += r["total_retiros"]
+                c["cargues"] += r["total_cargues"]
+                c["fees"] += r["total_fees"]
+                c["retiro_count"] += r["num_retiros"]
+                c["confirmed_days"] += 1
         if r["status"] == REPORT_SUBMITTED:
             c["pending_days"] += 1
         if not c["last_date"] or r["report_date"] > c["last_date"]:
