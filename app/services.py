@@ -8,6 +8,7 @@ from app.settings import get_system_currency
 from app.weekly_billing import (
     WEEKLY_DEDUCTION,
     apply_weekly_deductions,
+    get_user_deduction_details_batch,
     get_weekly_deductions_batch,
 )
 
@@ -667,17 +668,16 @@ def list_workers() -> list[dict]:
         user_ids = [row["id"] for row in rows]
         cumulative_map = get_cumulative_totals_batch(user_ids)
         deductions_map = get_weekly_deductions_batch(user_ids)
+        deduction_details = get_user_deduction_details_batch(user_ids)
         for row in rows:
             worker = dict(row)
             wid = _as_int(worker["id"])
             worker["id"] = wid
             worker["cumulative_total"] = cumulative_map.get(wid, 0.0)
             worker["weekly_deduction"] = deductions_map.get(wid, 0.0)
-            worker["weeks_worked"] = (
-                int(worker["weekly_deduction"] / WEEKLY_DEDUCTION)
-                if WEEKLY_DEDUCTION
-                else 0
-            )
+            details = deduction_details.get(wid, {})
+            worker["weeks_worked"] = details.get("weeks_worked", 0)
+            worker["transition_days"] = details.get("transition_days", 0)
             worker["pending_reports"] = count_pending_reports(wid)
             workers.append(worker)
         return workers
@@ -940,14 +940,17 @@ def get_admin_analytics(period: str = "all") -> dict:
     progress = sorted(clients.values(), key=lambda x: x["cumulative"], reverse=True)
     user_ids = [c["user_id"] for c in progress]
     deductions_map = get_weekly_deductions_batch(user_ids)
+    deduction_details = get_user_deduction_details_batch(user_ids)
     totals["weekly_deductions"] = round(sum(deductions_map.values()), 2)
 
     max_cumulative = 0.0
     for c in progress:
         uid = c["user_id"]
         weekly = deductions_map.get(uid, 0.0)
+        details = deduction_details.get(uid, {})
         c["weekly_deduction"] = weekly
-        c["weeks_worked"] = int(weekly / WEEKLY_DEDUCTION) if WEEKLY_DEDUCTION else 0
+        c["weeks_worked"] = details.get("weeks_worked", 0)
+        c["transition_days"] = details.get("transition_days", 0)
         c["cumulative"] = round(c["cumulative"] - weekly, 2)
         c["retiros"] = round(c["retiros"], 2)
         c["cargues"] = round(c["cargues"], 2)

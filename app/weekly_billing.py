@@ -10,6 +10,13 @@ from app.database import db_session
 WEEKLY_DEDUCTION = 500.0
 MEXICO_EMPLOYEE_TARGET = 3000.0
 
+# Transición 17–18 jul 2026 (antes del inicio de cuota semanal el lunes 20).
+TRANSITION_DATES = frozenset({date(2026, 7, 17), date(2026, 7, 18)})
+CLIENT_DAILY_DEDUCTION = 86.0
+ADMIN_DAILY_DEDUCTION = 578.0
+ADMIN_DAILY_USERNAMES = frozenset({"patachan", "nosorio"})
+WEEKLY_DEDUCTION_START = date(2026, 7, 20)
+
 
 def week_start(d: date) -> date:
     return d - timedelta(days=d.weekday())
@@ -54,29 +61,18 @@ def _as_float(value) -> float:
     return float(value)
 
 
-def get_user_work_weeks(user_id: int) -> list[str]:
-    since_sql, since_params = _report_since_filter("dr")
-    with db_session() as conn:
-        rows = conn.execute(
-            f"""
-            SELECT DISTINCT dr.report_date
-            FROM daily_reports dr
-            WHERE dr.user_id = ? AND dr.status = 'confirmed'
-            {since_sql}
-            ORDER BY dr.report_date
-            """,
-            (user_id, *since_params),
-        ).fetchall()
-    weeks = sorted({week_start_iso(r["report_date"]) for r in rows})
-    return weeks
+def _daily_deduction(username: str, role: str) -> float:
+    if role == "admin" and username.lower() in ADMIN_DAILY_USERNAMES:
+        return ADMIN_DAILY_DEDUCTION
+    return CLIENT_DAILY_DEDUCTION
 
 
-def get_user_weeks_batch(user_ids: list[int]) -> dict[int, list[str]]:
+def get_user_confirmed_dates_batch(user_ids: list[int]) -> dict[int, list[str]]:
     if not user_ids:
         return {}
     since_sql, since_params = _report_since_filter("dr")
     placeholders = ",".join("?" * len(user_ids))
-    user_weeks: dict[int, set[str]] = {uid: set() for uid in user_ids}
+    dates_map: dict[int, list[str]] = {uid: [] for uid in user_ids}
     with db_session() as conn:
         rows = conn.execute(
             f"""
@@ -84,23 +80,99 @@ def get_user_weeks_batch(user_ids: list[int]) -> dict[int, list[str]]:
             FROM daily_reports dr
             WHERE dr.user_id IN ({placeholders}) AND dr.status = 'confirmed'
             {since_sql}
+            ORDER BY dr.user_id, dr.report_date
             """,
             tuple(user_ids) + tuple(since_params),
         ).fetchall()
     for row in rows:
         uid = _as_int(row["user_id"])
-        user_weeks[uid].add(week_start_iso(row["report_date"]))
-    return {uid: sorted(weeks) for uid, weeks in user_weeks.items()}
+        dates_map[uid].append(row["report_date"])
+    return dates_map
+
+
+def get_user_confirmed_dates(user_id: int) -> list[str]:
+    return get_user_confirmed_dates_batch([user_id]).get(user_id, [])
+
+
+def calculate_user_deduction(username: str, role: str, confirmed_dates: list[str]) -> dict:
+    transition_days = 0
+    transition_amount = 0.0
+    weekly_weeks: set[str] = set()
+
+    for report_date_str in confirmed_dates:
+        d = date.fromisoformat(report_date_str)
+        if d in TRANSITION_DATES:
+            transition_days += 1
+            transition_amount += _daily_deduction(username, role)
+        elif d >= WEEKLY_DEDUCTION_START:
+            ws = week_start(d)
+            if ws >= WEEKLY_DEDUCTION_START:
+                weekly_weeks.add(ws.isoformat())
+
+    weekly_amount = round(len(weekly_weeks) * WEEKLY_DEDUCTION, 2)
+    transition_amount = round(transition_amount, 2)
+    total = round(transition_amount + weekly_amount, 2)
+
+    return {
+        "deduction": total,
+        "transition_days": transition_days,
+        "transition_amount": transition_amount,
+        "weeks_worked": len(weekly_weeks),
+        "weekly_amount": weekly_amount,
+        "week_labels": [week_label(w) for w in sorted(weekly_weeks)],
+    }
+
+
+def get_user_deduction_details_batch(user_ids: list[int]) -> dict[int, dict]:
+    if not user_ids:
+        return {}
+    dates_map = get_user_confirmed_dates_batch(user_ids)
+    result: dict[int, dict] = {}
+    with db_session() as conn:
+        for uid in user_ids:
+            row = conn.execute(
+                "SELECT username, role FROM users WHERE id = ?",
+                (uid,),
+            ).fetchone()
+            if not row:
+                result[uid] = calculate_user_deduction("", "worker", dates_map.get(uid, []))
+                continue
+            result[uid] = calculate_user_deduction(
+                row["username"],
+                row["role"],
+                dates_map.get(uid, []),
+            )
+    return result
+
+
+def get_user_work_weeks(user_id: int) -> list[str]:
+    confirmed = get_user_confirmed_dates(user_id)
+    weeks = {
+        week_start(date.fromisoformat(d)).isoformat()
+        for d in confirmed
+        if date.fromisoformat(d) >= WEEKLY_DEDUCTION_START
+        and week_start(date.fromisoformat(d)) >= WEEKLY_DEDUCTION_START
+    }
+    return sorted(weeks)
+
+
+def get_user_weeks_batch(user_ids: list[int]) -> dict[int, list[str]]:
+    dates_map = get_user_confirmed_dates_batch(user_ids)
+    result: dict[int, list[str]] = {uid: [] for uid in user_ids}
+    for uid in user_ids:
+        weeks = {
+            week_start(date.fromisoformat(d)).isoformat()
+            for d in dates_map.get(uid, [])
+            if date.fromisoformat(d) >= WEEKLY_DEDUCTION_START
+            and week_start(date.fromisoformat(d)) >= WEEKLY_DEDUCTION_START
+        }
+        result[uid] = sorted(weeks)
+    return result
 
 
 def get_weekly_deductions_batch(user_ids: list[int]) -> dict[int, float]:
-    if not user_ids:
-        return {}
-    weeks_map = get_user_weeks_batch(user_ids)
-    return {
-        uid: round(len(weeks_map.get(uid, [])) * WEEKLY_DEDUCTION, 2)
-        for uid in user_ids
-    }
+    details = get_user_deduction_details_batch(user_ids)
+    return {uid: details.get(uid, {}).get("deduction", 0.0) for uid in user_ids}
 
 
 def apply_weekly_deductions(gross: dict[int, float]) -> dict[int, float]:
@@ -114,10 +186,20 @@ def apply_weekly_deductions(gross: dict[int, float]) -> dict[int, float]:
 
 
 def get_user_billing_summary(user_id: int, gross: float) -> dict:
-    weeks = get_user_work_weeks(user_id)
-    deduction = round(len(weeks) * WEEKLY_DEDUCTION, 2)
+    with db_session() as conn:
+        row = conn.execute(
+            "SELECT username, role FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+    username = row["username"] if row else ""
+    role = row["role"] if row else "worker"
+    details = calculate_user_deduction(username, role, get_user_confirmed_dates(user_id))
+    deduction = details["deduction"]
     return {
-        "weeks_worked": len(weeks),
+        "weeks_worked": details["weeks_worked"],
+        "transition_days": details["transition_days"],
+        "transition_amount": details["transition_amount"],
+        "weekly_amount": details["weekly_amount"],
         "weekly_deduction_total": deduction,
         "gross_cumulative": round(gross, 2),
         "net_cumulative": round(gross - deduction, 2),
@@ -148,8 +230,7 @@ def get_mexico_pay_paid_total() -> float:
 
 def get_mexico_pay_status() -> dict:
     user_ids = get_active_billable_user_ids()
-    deductions = get_weekly_deductions_batch(user_ids)
-    weeks_map = get_user_weeks_batch(user_ids)
+    details_map = get_user_deduction_details_batch(user_ids)
     contributions = []
     total_accrued = 0.0
 
@@ -161,17 +242,18 @@ def get_mexico_pay_status() -> dict:
             ).fetchone()
             if not row:
                 continue
-            amount = deductions.get(uid, 0.0)
-            weeks = weeks_map.get(uid, [])
+            details = details_map.get(uid, {})
+            amount = details.get("deduction", 0.0)
             contributions.append(
                 {
                     "user_id": uid,
                     "name": row["name"],
                     "username": row["username"],
                     "role": row["role"],
-                    "weeks_worked": len(weeks),
+                    "weeks_worked": details.get("weeks_worked", 0),
+                    "transition_days": details.get("transition_days", 0),
                     "amount": amount,
-                    "week_labels": [week_label(w) for w in weeks],
+                    "week_labels": details.get("week_labels", []),
                 }
             )
             total_accrued += amount

@@ -34,7 +34,8 @@
   {% if billing %}
   <p class="text-sm text-gray-400 mb-6 -mt-4">
     Bruto periodo: {{ billing.gross_cumulative | money }}
-    · Cuota semanal: − {{ billing.weekly_deduction_total | money }} ({{ billing.weeks_worked }} sem.)
+    · Descuento cuota: − {{ billing.weekly_deduction_total | money }}
+    {% if billing.transition_days > 0 %}({{ billing.transition_days }} día(s) transición{% if billing.weeks_worked > 0 %}, {{ billing.weeks_worked }} sem.{% endif %}){% elif billing.weeks_worked > 0 %}({{ billing.weeks_worked }} sem.){% endif %}
     · <strong class="text-gray-300">Neto acumulado:</strong>
     <strong class="text-betpro-400">{{ billing.net_cumulative | money }}</strong>
   </p>

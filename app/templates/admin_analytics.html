@@ -78,7 +78,8 @@
         </div>
         <p class="text-sm text-gray-400 mb-4">
           Meta semanal: {{ mexico_pay.target | money }} ·
-          {{ mexico_pay.weekly_per_person | money }} por persona por semana trabajada (lun–dom)
+          17–18/jul: $86/día (clientes) · $578/día (Johan/Nicolás) ·
+          Desde lun 20/jul: {{ mexico_pay.weekly_per_person | money }}/semana por persona
         </p>
         <div class="mexico-pay-progress mb-3">
           <div class="mexico-pay-progress-fill" style="width: {{ mexico_pay.progress_pct }}%"></div>
@@ -129,8 +130,9 @@
           </div>
           <p class="text-xs text-gray-500 mt-1">
             {% if p.role == 'admin' %}Admin{% else %}Cliente{% endif %}
-            · {{ p.weeks_worked }} sem.
-            {% if p.weeks_worked == 0 %}— sin semanas trabajadas{% endif %}
+            {% if p.transition_days > 0 %} · {{ p.transition_days }} día(s) transición{% endif %}
+            {% if p.weeks_worked > 0 %} · {{ p.weeks_worked }} sem.{% endif %}
+            {% if p.transition_days == 0 and p.weeks_worked == 0 %}— sin aporte aún{% endif %}
           </p>
         </div>
         {% endfor %}
@@ -152,7 +154,7 @@
     <div class="dash-kpi">
       <span class="dash-kpi-label">Cuotas semanales</span>
       <span class="dash-kpi-value text-orange-300">{{ analytics.totals.weekly_deductions | money }}</span>
-      <span class="dash-kpi-sub">$500 × semana trabajada</span>
+      <span class="dash-kpi-sub">17–18/jul por día · $500/sem desde 20/jul</span>
     </div>
     <div class="dash-kpi">
       <span class="dash-kpi-label">Descuentos</span>
