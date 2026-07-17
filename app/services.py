@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 from typing import Optional
 
-from app.cortes import get_corte_cutoff_date
+from app.cortes import get_corte_cutoff_date, get_last_accepted_corte
 from app.currencies import DEFAULT_CURRENCY, normalize_currency
 from app.database import db_session
 from app.settings import get_system_currency
@@ -601,19 +601,26 @@ def change_report_date(report_id: int, new_date: str) -> str:
     return new_date
 
 
-def list_pending_reports(limit: int = 20) -> list[dict]:
+def list_pending_reports(limit: int = 20, after_date: str | None = None) -> list[dict]:
     with db_session() as conn:
+        after_sql = ""
+        params: list = []
+        if after_date:
+            after_sql = " AND dr.report_date > ?"
+            params.append(after_date)
+        params.append(limit)
         rows = conn.execute(
-            """
+            f"""
             SELECT dr.id, dr.report_date, dr.submitted_at, u.id AS user_id,
                    u.name AS user_name, u.username
             FROM daily_reports dr
             JOIN users u ON u.id = dr.user_id
             WHERE dr.status = 'submitted'
+            {after_sql}
             ORDER BY dr.submitted_at DESC
             LIMIT ?
             """,
-            (limit,),
+            tuple(params),
         ).fetchall()
         results = []
         for row in rows:
@@ -626,16 +633,22 @@ def list_pending_reports(limit: int = 20) -> list[dict]:
         return results
 
 
-def count_pending_reports(user_id: int | None = None) -> int:
+def count_pending_reports(user_id: int | None = None, after_date: str | None = None) -> int:
+    after_sql = " AND report_date > ?" if after_date else ""
     with db_session() as conn:
         if user_id:
+            params: list = [user_id]
+            if after_date:
+                params.append(after_date)
             row = conn.execute(
-                "SELECT COUNT(*) AS c FROM daily_reports WHERE user_id = ? AND status = 'submitted'",
-                (user_id,),
+                f"SELECT COUNT(*) AS c FROM daily_reports WHERE user_id = ? AND status = 'submitted'{after_sql}",
+                tuple(params),
             ).fetchone()
         else:
+            params = [after_date] if after_date else []
             row = conn.execute(
-                "SELECT COUNT(*) AS c FROM daily_reports WHERE status = 'submitted'"
+                f"SELECT COUNT(*) AS c FROM daily_reports WHERE status = 'submitted'{after_sql}",
+                tuple(params),
             ).fetchone()
         return _as_int(row["c"]) if row else 0
 
@@ -787,6 +800,18 @@ def _in_period(report_date: str, start: str | None, end: str | None) -> bool:
     return start <= report_date <= end
 
 
+def _after_corte(report_date: str, cutoff: str | None) -> bool:
+    if not cutoff:
+        return True
+    return report_date > cutoff
+
+
+def _corte_period_label(cutoff: str | None) -> str | None:
+    if not cutoff:
+        return None
+    return f"{cutoff[8:10]}/{cutoff[5:7]}/{cutoff[:4]}"
+
+
 def _load_reports_index() -> tuple[list[dict], dict, dict, dict]:
     with db_session() as conn:
         reports = [
@@ -859,9 +884,12 @@ def _report_summary_row(
 
 
 def get_admin_analytics(period: str = "all") -> dict:
+    cutoff = get_corte_cutoff_date()
+    last_corte = get_last_accepted_corte()
     start, end = _period_range(period)
     reports_raw, cargues, retiros, discounts = _load_reports_index()
     enriched = [_report_summary_row(r, cargues, retiros, discounts) for r in reports_raw]
+    enriched = [r for r in enriched if _after_corte(r["report_date"], cutoff)]
 
     period_reports = [r for r in enriched if _in_period(r["report_date"], start, end)]
     confirmed_period = [r for r in period_reports if r["status"] == REPORT_CONFIRMED]
@@ -898,15 +926,12 @@ def get_admin_analytics(period: str = "all") -> dict:
             }
         c = clients[uid]
         if r["status"] == REPORT_CONFIRMED:
-            cutoff = get_corte_cutoff_date()
-            in_period = not cutoff or r["report_date"] > cutoff
-            if in_period:
-                c["cumulative"] += r["daily_total"]
-                c["retiros"] += r["total_retiros"]
-                c["cargues"] += r["total_cargues"]
-                c["fees"] += r["total_fees"]
-                c["retiro_count"] += r["num_retiros"]
-                c["confirmed_days"] += 1
+            c["cumulative"] += r["daily_total"]
+            c["retiros"] += r["total_retiros"]
+            c["cargues"] += r["total_cargues"]
+            c["fees"] += r["total_fees"]
+            c["retiro_count"] += r["num_retiros"]
+            c["confirmed_days"] += 1
         if r["status"] == REPORT_SUBMITTED:
             c["pending_days"] += 1
         if not c["last_date"] or r["report_date"] > c["last_date"]:
@@ -938,10 +963,19 @@ def get_admin_analytics(period: str = "all") -> dict:
 
     trend_days = 14
     today = date.today()
+    if cutoff:
+        corte_day_after = date.fromisoformat(cutoff) + timedelta(days=1)
+        window_start = today - timedelta(days=trend_days - 1)
+        trend_start = max(corte_day_after, window_start)
+    else:
+        trend_start = today - timedelta(days=trend_days - 1)
+
     trend_map: dict[str, dict] = {}
-    for i in range(trend_days - 1, -1, -1):
-        d = (today - timedelta(days=i)).isoformat()
-        trend_map[d] = {"date": d, "net": 0.0, "retiros": 0.0, "cargues": 0.0}
+    d = trend_start
+    while d <= today:
+        iso = d.isoformat()
+        trend_map[iso] = {"date": iso, "net": 0.0, "retiros": 0.0, "cargues": 0.0}
+        d += timedelta(days=1)
 
     for r in enriched:
         if r["status"] != REPORT_CONFIRMED:
@@ -965,21 +999,30 @@ def get_admin_analytics(period: str = "all") -> dict:
         item["bar_pct"] = round((abs(item["net"]) / max_net * 100), 1) if max_net else 0
 
     period_labels = {
-        "all": "Histórico total",
+        "all": "Periodo actual" if cutoff else "Histórico total",
         "today": "Hoy",
         "week": "Últimos 7 días",
         "month": "Este mes",
     }
+    period_label = period_labels.get(period, "Histórico total")
+    corte_since = _corte_period_label(cutoff)
+    if period == "all" and corte_since:
+        period_label = f"Periodo actual (desde {corte_since})"
 
-    all_time_net = round(sum(r["daily_total"] for r in enriched if r["status"] == REPORT_CONFIRMED), 2)
+    period_net = round(
+        sum(r["daily_total"] for r in enriched if r["status"] == REPORT_CONFIRMED), 2
+    )
 
     return {
         "period": period,
-        "period_label": period_labels.get(period, "Histórico total"),
+        "period_label": period_label,
         "totals": totals,
-        "all_time_net": all_time_net,
+        "period_net": period_net,
+        "all_time_net": period_net,
         "clients_progress": progress,
         "daily_trend": daily_trend,
         "active_clients": len(clients),
-        "total_pending": count_pending_reports(),
+        "total_pending": count_pending_reports(after_date=cutoff),
+        "current_corte": last_corte,
+        "corte_cutoff": cutoff,
     }

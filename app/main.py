@@ -57,6 +57,7 @@ from app.cortes import (
     build_corte_preview,
     ensure_pending_corte,
     get_corte_detail,
+    get_corte_cutoff_date,
     get_last_accepted_corte,
     get_pending_corte,
     list_cortes,
@@ -456,7 +457,7 @@ async def admin_dashboard(request: Request, period: str = "all"):
     try:
         ensure_pending_corte()
         analytics = get_admin_analytics(period)
-        pending = list_pending_reports()
+        pending = list_pending_reports(after_date=get_corte_cutoff_date())
         pending_corte = get_pending_corte()
         mexico_pay = get_mexico_pay_status()
     except Exception:
