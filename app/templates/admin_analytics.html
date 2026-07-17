@@ -150,7 +150,12 @@
       <span class="dash-kpi-value">{{ analytics.totals.cargues | money }}</span>
     </div>
     <div class="dash-kpi">
-      <span class="dash-kpi-label">Cuotas semanales</span>
+      <span class="dash-kpi-label">Tarifas retiro</span>
+      <span class="dash-kpi-value text-orange-300">{{ analytics.totals.retiro_fees | money }}</span>
+      <span class="dash-kpi-sub">$17 × {{ analytics.totals.retiro_count }} retiros</span>
+    </div>
+    <div class="dash-kpi">
+      <span class="dash-kpi-label">Cuotas empleado MX</span>
       <span class="dash-kpi-value text-orange-300">{{ analytics.totals.weekly_deductions | money }}</span>
       <span class="dash-kpi-sub">17–18/jul por día · $500÷6 días lab. desde 20/jul</span>
     </div>

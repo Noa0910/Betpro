@@ -30,6 +30,7 @@ from app import urls as U
 from app.auth import authenticate_user, check_admin_session, check_user_session, get_user_by_username, login_redirect, verify_password
 from app.config import CANONICAL_HOST, DB_EPHEMERAL, IS_VERCEL, USE_TURSO, get_session_secret, APP_VERSION
 from app.services import (
+    RETIRO_PROCESSING_FEE,
     REPORT_CONFIRMED,
     REPORT_SUBMITTED,
     confirm_report,
@@ -209,6 +210,7 @@ templates.env.globals["app_version"] = APP_VERSION
 templates.env.globals["db_ephemeral"] = DB_EPHEMERAL
 templates.env.globals["currency_choices"] = currency_choices
 templates.env.globals["system_currency"] = get_system_currency
+templates.env.globals["retiro_processing_fee"] = RETIRO_PROCESSING_FEE
 
 
 def build_cargues_items(report: dict) -> list[dict]:

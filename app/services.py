@@ -18,11 +18,13 @@ REPORT_DRAFT = "draft"
 REPORT_SUBMITTED = "submitted"
 REPORT_CONFIRMED = "confirmed"
 
+RETIRO_PROCESSING_FEE = 17.0
+
 EMPTY_SUMMARY = {
     "total_cargues": 0.0,
     "total_retiros": 0.0,
     "num_retiros": 0,
-    "retiro_fee": 0.0,
+    "retiro_fee": RETIRO_PROCESSING_FEE,
     "total_fees": 0.0,
     "total_discounts": 0.0,
     "preview_total": 0.0,
@@ -178,7 +180,7 @@ def _calc_totals(report: dict, include_in_official: bool) -> dict:
     total_cargues = round(sum(c["amount"] for c in report["cargues"]), 2)
     total_retiros = round(sum(r["amount"] for r in report["retiros"]), 2)
     num_retiros = len(report["retiros"])
-    total_fees = 0.0
+    total_fees = round(num_retiros * RETIRO_PROCESSING_FEE, 2)
     total_discounts = round(sum(d["amount"] for d in report["discounts"]), 2)
     computed = round(total_retiros - total_cargues - total_fees - total_discounts, 2)
     daily_total = computed if include_in_official else 0.0
@@ -187,7 +189,7 @@ def _calc_totals(report: dict, include_in_official: bool) -> dict:
         "total_cargues": total_cargues,
         "total_retiros": total_retiros,
         "num_retiros": num_retiros,
-        "retiro_fee": 0.0,
+        "retiro_fee": RETIRO_PROCESSING_FEE,
         "total_fees": total_fees,
         "total_discounts": total_discounts,
         "preview_total": computed,
@@ -868,8 +870,8 @@ def _report_summary_row(
     retiro_data = retiros.get(rid, {"total": 0, "count": 0})
     total_retiros = round(float(retiro_data["total"] or 0), 2)
     num_retiros = int(retiro_data["count"] or 0)
-    retiro_fee = _as_float(report.get("retiro_fee"))
-    total_fees = 0.0
+    retiro_fee = RETIRO_PROCESSING_FEE
+    total_fees = round(num_retiros * RETIRO_PROCESSING_FEE, 2)
     total_discounts = round(float(discounts.get(rid, 0) or 0), 2)
     preview = round(total_retiros - total_cargues - total_fees - total_discounts, 2)
     confirmed = report["status"] == REPORT_CONFIRMED
@@ -904,6 +906,7 @@ def get_admin_analytics(period: str = "all") -> dict:
         period_user_dates.setdefault(uid, []).append(r["report_date"])
     period_quota = get_deductions_for_user_dates_batch(period_user_dates)
     gross_income = round(sum(r["daily_total"] for r in confirmed_period), 2)
+    retiro_fees = round(sum(r["total_fees"] for r in confirmed_period), 2)
 
     totals = {
         "gross_income": gross_income,
@@ -911,7 +914,8 @@ def get_admin_analytics(period: str = "all") -> dict:
         "quota_deductions": period_quota,
         "retiros": round(sum(r["total_retiros"] for r in confirmed_period), 2),
         "cargues": round(sum(r["total_cargues"] for r in confirmed_period), 2),
-        "fees": 0.0,
+        "fees": retiro_fees,
+        "retiro_fees": retiro_fees,
         "weekly_deductions": period_quota,
         "discounts": round(sum(r["total_discounts"] for r in confirmed_period), 2),
         "retiro_count": sum(r["num_retiros"] for r in confirmed_period),
@@ -968,7 +972,7 @@ def get_admin_analytics(period: str = "all") -> dict:
         c["cumulative"] = round(c["cumulative"] - weekly, 2)
         c["retiros"] = round(c["retiros"], 2)
         c["cargues"] = round(c["cargues"], 2)
-        c["fees"] = 0.0
+        c["fees"] = round(c["fees"], 2)
         max_cumulative = max(max_cumulative, c["cumulative"])
 
     progress.sort(key=lambda x: x["cumulative"], reverse=True)
