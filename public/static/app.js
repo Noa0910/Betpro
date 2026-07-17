@@ -61,18 +61,16 @@ function recalcDaySummary() {
   const summary = document.querySelector("[data-day-summary]");
   if (!summary || summary.dataset.editable !== "true") return;
 
-  const fee = parseFloat(summary.dataset.retiroFee || "0") || 0;
+  const fee = 0;
   const discounts = parseFloat(summary.dataset.discounts || "0") || 0;
 
   let totalRetiros = 0;
   let totalCargues = 0;
-  let numRetiros = 0;
 
   document.querySelectorAll('input[name="retiro_amount"]').forEach((input) => {
     const val = parseFloat(input.value);
     if (!isNaN(val) && val > 0) {
       totalRetiros += val;
-      numRetiros += 1;
     }
   });
 
@@ -81,7 +79,7 @@ function recalcDaySummary() {
     if (!isNaN(val) && val > 0) totalCargues += val;
   });
 
-  const totalFees = numRetiros * fee;
+  const totalFees = 0;
   const dayTotal = totalRetiros - totalCargues - totalFees - discounts;
 
   const setText = (selector, text) => {
@@ -91,12 +89,8 @@ function recalcDaySummary() {
 
   setText("[data-sum-retiros]", formatMoney(totalRetiros));
   setText("[data-sum-cargues]", "− " + formatMoney(totalCargues));
-  setText("[data-sum-fees]", "− " + formatMoney(totalFees));
   setText("[data-sum-discounts]", "− " + formatMoney(discounts));
   setText("[data-sum-day]", formatMoney(dayTotal));
-
-  const numEl = summary.querySelector("[data-sum-num-retiros]");
-  if (numEl) numEl.textContent = String(numRetiros);
 
   const discountRow = summary.querySelector("[data-discount-row]");
   if (discountRow) discountRow.classList.toggle("hidden", discounts <= 0);

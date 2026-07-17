@@ -8,6 +8,7 @@ CLIENTES = "/clientes"
 ADMINISTRADORES = "/administradores"
 CORTES = "/cortes"
 DIVISA = "/divisa"
+PAGO_MEXICO = "/reportes/pago-mexico"
 
 
 def mis_reportes_guardar() -> str:

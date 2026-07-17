@@ -13,7 +13,7 @@
           <p class="text-sm text-gray-400">
             @{{ worker.username }}
             {% if worker.role == 'admin' %} · Admin{% else %} · Cliente{% endif %}
-            · Tarifa retiro: {{ worker.retiro_fee | money }}
+            · Cuota: $500/semana trabajada
           </p>
         </div>
       </div>
@@ -36,6 +36,15 @@
     cumulative_subtitle,
     report.summary.daily_total if report.summary.is_confirmed else report.summary.preview_total
   ) }}
+
+  {% if billing %}
+  <p class="text-sm text-gray-400 mb-6 -mt-4">
+    Bruto periodo: {{ billing.gross_cumulative | money }}
+    · Cuota semanal: − {{ billing.weekly_deduction_total | money }} ({{ billing.weeks_worked }} sem.)
+    · <strong class="text-gray-300">Neto acumulado:</strong>
+    <strong class="text-betpro-400">{{ billing.net_cumulative | money }}</strong>
+  </p>
+  {% endif %}
 
   <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
     <div>

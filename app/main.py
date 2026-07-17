@@ -14,6 +14,12 @@ from starlette.requests import Request as StarletteRequest
 from jinja2 import pass_context
 
 from app.currencies import currency_choices, format_money as format_money_value
+from app.weekly_billing import (
+    MEXICO_EMPLOYEE_TARGET,
+    get_mexico_pay_status,
+    get_user_billing_summary,
+    register_mexico_pay,
+)
 from app import urls as U
 from app.auth import authenticate_user, check_admin_session, check_user_session, get_user_by_username, login_redirect, verify_password
 from app.config import CANONICAL_HOST, DB_EPHEMERAL, IS_VERCEL, USE_TURSO, get_session_secret, APP_VERSION
@@ -25,6 +31,7 @@ from app.services import (
     create_worker,
     create_admin,
     get_admin_analytics,
+    get_cumulative_gross_batch,
     get_cumulative_total,
     get_or_create_report,
     get_report_details,
@@ -224,8 +231,15 @@ def cumulative_subtitle() -> str:
     last = get_last_accepted_corte()
     if last:
         pe = last["period_end"]
-        return f"Periodo actual — desde {pe[8:10]}/{pe[5:7]}/{pe[:4]}"
-    return "Suma de días confirmados del periodo actual"
+        base = f"Periodo actual — desde {pe[8:10]}/{pe[5:7]}/{pe[:4]}"
+    else:
+        base = "Suma de días confirmados del periodo actual"
+    return f"{base} · Incluye descuento de $500 por semana trabajada (lun–dom)"
+
+
+def billing_context(user_id: int) -> dict:
+    gross = get_cumulative_gross_batch([user_id]).get(user_id, 0.0)
+    return get_user_billing_summary(user_id, gross)
 
 
 def build_worker_panel_context(
@@ -251,6 +265,7 @@ def build_worker_panel_context(
         "history": get_user_reports(user["id"], limit=15),
         "cumulative": get_cumulative_total(user["id"]),
         "cumulative_subtitle": cumulative_subtitle(),
+        "billing": billing_context(user["id"]),
         "message": message,
         "error": error,
         **ctx,
@@ -443,6 +458,7 @@ async def admin_dashboard(request: Request, period: str = "all"):
         analytics = get_admin_analytics(period)
         pending = list_pending_reports()
         pending_corte = get_pending_corte()
+        mexico_pay = get_mexico_pay_status()
     except Exception:
         return RedirectResponse(
             with_query(U.REPORTES, error="No se pudo cargar el dashboard. Intenta de nuevo."),
@@ -457,10 +473,39 @@ async def admin_dashboard(request: Request, period: str = "all"):
             "analytics": analytics,
             "pending_reports": pending,
             "pending_corte": pending_corte,
+            "mexico_pay": mexico_pay,
             "period": period,
             "message": request.query_params.get("msg"),
             "error": request.query_params.get("error"),
         },
+    )
+
+
+@app.post(U.PAGO_MEXICO)
+async def admin_register_mexico_pay(request: Request, amount: str = Form("")):
+    user, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
+
+    pay_amount = None
+    if amount.strip():
+        try:
+            pay_amount = parse_amount(amount)
+        except ValueError as exc:
+            return RedirectResponse(
+                with_query(U.REPORTES, error=str(exc)),
+                status_code=303,
+            )
+
+    try:
+        register_mexico_pay(user["id"], pay_amount)
+    except ValueError as exc:
+        return RedirectResponse(with_query(U.REPORTES, error=str(exc)), status_code=303)
+
+    paid = pay_amount if pay_amount is not None else MEXICO_EMPLOYEE_TARGET
+    return RedirectResponse(
+        with_query(U.REPORTES, msg=f"Pago empleado México registrado: {paid:,.2f}"),
+        status_code=303,
     )
 
 
@@ -564,7 +609,7 @@ async def admin_create_worker(
     password: str = Form(...),
     password_confirm: str = Form(""),
     name: str = Form(...),
-    retiro_fee: str = Form("50"),
+    retiro_fee: str = Form("0"),
 ):
     _, auth_redirect = check_admin_session(request)
     if auth_redirect:
@@ -573,7 +618,7 @@ async def admin_create_worker(
     try:
         if password != password_confirm:
             raise ValueError("Las contraseñas no coinciden")
-        create_worker(username_clean, password, name, parse_amount(retiro_fee))
+        create_worker(username_clean, password, name, 0.0)
     except ValueError as exc:
         return RedirectResponse(with_query(U.CLIENTES, error=str(exc)), status_code=303)
 
@@ -733,6 +778,7 @@ async def admin_worker_detail(request: Request, worker_id: int, fecha: str | Non
             "history": history,
             "cumulative": cumulative,
             "cumulative_subtitle": cumulative_subtitle(),
+            "billing": billing_context(worker_id),
             "can_confirm": details["status"] == REPORT_SUBMITTED and worker_id != user["id"],
             "is_confirmed": details["status"] == REPORT_CONFIRMED,
             "can_reopen": details["status"] == REPORT_SUBMITTED and worker_id != user["id"],

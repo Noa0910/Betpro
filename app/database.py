@@ -272,10 +272,27 @@ def _migrate_cortes(conn) -> None:
         conn.execute("ALTER TABLE corte_snapshots ADD COLUMN confirmed_days INTEGER NOT NULL DEFAULT 0")
 
 
+def _migrate_mexico_pay(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS mexico_pay_payouts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            amount REAL NOT NULL,
+            paid_at TEXT NOT NULL DEFAULT (datetime('now')),
+            paid_by INTEGER,
+            notes TEXT,
+            FOREIGN KEY(paid_by) REFERENCES users(id)
+        )
+        """
+    )
+    conn.execute("UPDATE users SET retiro_fee = 0")
+
+
 def _migrate(conn) -> None:
     _migrate_currency(conn)
     _migrate_app_settings(conn)
     _migrate_cortes(conn)
+    _migrate_mexico_pay(conn)
     if USE_TURSO:
         return
 
@@ -415,11 +432,20 @@ def init_db() -> None:
                 FOREIGN KEY(corte_id) REFERENCES cortes(id) ON DELETE CASCADE,
                 FOREIGN KEY(user_id) REFERENCES users(id)
             );
+            CREATE TABLE IF NOT EXISTS mexico_pay_payouts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                amount REAL NOT NULL,
+                paid_at TEXT NOT NULL DEFAULT (datetime('now')),
+                paid_by INTEGER,
+                notes TEXT,
+                FOREIGN KEY(paid_by) REFERENCES users(id)
+            );
             """
         )
         conn.execute(
             "INSERT OR IGNORE INTO app_settings (key, value) VALUES ('currency', 'USD')"
         )
+        conn.execute("UPDATE users SET retiro_fee = 0")
         _migrate(conn)
         _create_indexes(conn)
 

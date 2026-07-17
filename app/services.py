@@ -5,6 +5,11 @@ from app.cortes import get_corte_cutoff_date
 from app.currencies import DEFAULT_CURRENCY, normalize_currency
 from app.database import db_session
 from app.settings import get_system_currency
+from app.weekly_billing import (
+    WEEKLY_DEDUCTION,
+    apply_weekly_deductions,
+    get_weekly_deductions_batch,
+)
 
 REPORT_DRAFT = "draft"
 REPORT_SUBMITTED = "submitted"
@@ -170,8 +175,7 @@ def _calc_totals(report: dict, include_in_official: bool) -> dict:
     total_cargues = round(sum(c["amount"] for c in report["cargues"]), 2)
     total_retiros = round(sum(r["amount"] for r in report["retiros"]), 2)
     num_retiros = len(report["retiros"])
-    retiro_fee = _as_float(report.get("retiro_fee"))
-    total_fees = round(num_retiros * retiro_fee, 2)
+    total_fees = 0.0
     total_discounts = round(sum(d["amount"] for d in report["discounts"]), 2)
     computed = round(total_retiros - total_cargues - total_fees - total_discounts, 2)
     daily_total = computed if include_in_official else 0.0
@@ -180,7 +184,7 @@ def _calc_totals(report: dict, include_in_official: bool) -> dict:
         "total_cargues": total_cargues,
         "total_retiros": total_retiros,
         "num_retiros": num_retiros,
-        "retiro_fee": retiro_fee,
+        "retiro_fee": 0.0,
         "total_fees": total_fees,
         "total_discounts": total_discounts,
         "preview_total": computed,
@@ -264,7 +268,7 @@ def _corte_sql_extra(alias: str = "dr") -> tuple[str, list]:
     return "", []
 
 
-def get_cumulative_totals_batch(user_ids: list[int]) -> dict[int, float]:
+def get_cumulative_gross_batch(user_ids: list[int]) -> dict[int, float]:
     if not user_ids:
         return {}
 
@@ -294,6 +298,10 @@ def get_cumulative_totals_batch(user_ids: list[int]) -> dict[int, float]:
         uid = _as_int(row["user_id"])
         totals[uid] = round(totals[uid] + report["summary"]["daily_total"], 2)
     return totals
+
+
+def get_cumulative_totals_batch(user_ids: list[int]) -> dict[int, float]:
+    return apply_weekly_deductions(get_cumulative_gross_batch(user_ids))
 
 
 def get_user_reports(user_id: int, limit: int = 30) -> list[dict]:
@@ -645,11 +653,18 @@ def list_workers() -> list[dict]:
         workers = []
         user_ids = [row["id"] for row in rows]
         cumulative_map = get_cumulative_totals_batch(user_ids)
+        deductions_map = get_weekly_deductions_batch(user_ids)
         for row in rows:
             worker = dict(row)
             wid = _as_int(worker["id"])
             worker["id"] = wid
             worker["cumulative_total"] = cumulative_map.get(wid, 0.0)
+            worker["weekly_deduction"] = deductions_map.get(wid, 0.0)
+            worker["weeks_worked"] = (
+                int(worker["weekly_deduction"] / WEEKLY_DEDUCTION)
+                if WEEKLY_DEDUCTION
+                else 0
+            )
             worker["pending_reports"] = count_pending_reports(wid)
             workers.append(worker)
         return workers
@@ -674,7 +689,7 @@ def create_admin(username: str, password: str, name: str) -> None:
         conn.execute(
             """
             INSERT INTO users (username, password_hash, name, role, retiro_fee, currency)
-            VALUES (?, ?, ?, 'admin', 50, ?)
+            VALUES (?, ?, ?, 'admin', 0, ?)
             """,
             (username, hash_password(password), name, get_system_currency()),
         )
@@ -826,7 +841,7 @@ def _report_summary_row(
     total_retiros = round(float(retiro_data["total"] or 0), 2)
     num_retiros = int(retiro_data["count"] or 0)
     retiro_fee = _as_float(report.get("retiro_fee"))
-    total_fees = round(num_retiros * retiro_fee, 2)
+    total_fees = 0.0
     total_discounts = round(float(discounts.get(rid, 0) or 0), 2)
     preview = round(total_retiros - total_cargues - total_fees - total_discounts, 2)
     confirmed = report["status"] == REPORT_CONFIRMED
@@ -856,7 +871,8 @@ def get_admin_analytics(period: str = "all") -> dict:
         "net_income": round(sum(r["daily_total"] for r in confirmed_period), 2),
         "retiros": round(sum(r["total_retiros"] for r in confirmed_period), 2),
         "cargues": round(sum(r["total_cargues"] for r in confirmed_period), 2),
-        "fees": round(sum(r["total_fees"] for r in confirmed_period), 2),
+        "fees": 0.0,
+        "weekly_deductions": 0.0,
         "discounts": round(sum(r["total_discounts"] for r in confirmed_period), 2),
         "retiro_count": sum(r["num_retiros"] for r in confirmed_period),
         "confirmed_reports": len(confirmed_period),
@@ -897,12 +913,24 @@ def get_admin_analytics(period: str = "all") -> dict:
             c["last_date"] = r["report_date"]
 
     progress = sorted(clients.values(), key=lambda x: x["cumulative"], reverse=True)
-    max_cumulative = progress[0]["cumulative"] if progress else 0
+    user_ids = [c["user_id"] for c in progress]
+    deductions_map = get_weekly_deductions_batch(user_ids)
+    totals["weekly_deductions"] = round(sum(deductions_map.values()), 2)
+
+    max_cumulative = 0.0
     for c in progress:
-        c["cumulative"] = round(c["cumulative"], 2)
+        uid = c["user_id"]
+        weekly = deductions_map.get(uid, 0.0)
+        c["weekly_deduction"] = weekly
+        c["weeks_worked"] = int(weekly / WEEKLY_DEDUCTION) if WEEKLY_DEDUCTION else 0
+        c["cumulative"] = round(c["cumulative"] - weekly, 2)
         c["retiros"] = round(c["retiros"], 2)
         c["cargues"] = round(c["cargues"], 2)
-        c["fees"] = round(c["fees"], 2)
+        c["fees"] = 0.0
+        max_cumulative = max(max_cumulative, c["cumulative"])
+
+    progress.sort(key=lambda x: x["cumulative"], reverse=True)
+    for c in progress:
         if max_cumulative > 0:
             c["progress_pct"] = round((c["cumulative"] / max_cumulative) * 100, 1)
         else:

@@ -61,6 +61,78 @@
     </div>
   </div>
 
+  <section class="mexico-pay-card mb-8{% if mexico_pay.is_complete %} mexico-pay-card--complete{% endif %}">
+    <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
+      <div class="flex-1">
+        <div class="flex items-center gap-3 mb-2">
+          <h3 class="text-xl font-bold">Pago empleado México</h3>
+          {% if mexico_pay.is_complete %}
+          <span class="mexico-pay-badge">Meta completada</span>
+          {% endif %}
+        </div>
+        <p class="text-sm text-gray-400 mb-4">
+          Meta semanal: {{ mexico_pay.target | money }} ·
+          {{ mexico_pay.weekly_per_person | money }} por persona por semana trabajada (lun–dom)
+        </p>
+        <div class="mexico-pay-progress mb-3">
+          <div class="mexico-pay-progress-fill" style="width: {{ mexico_pay.progress_pct }}%"></div>
+        </div>
+        <div class="flex flex-wrap gap-6 text-sm">
+          <div>
+            <span class="text-gray-500">Acumulado periodo</span>
+            <p class="text-lg font-semibold text-betpro-400">{{ mexico_pay.total_accrued | money }}</p>
+          </div>
+          <div>
+            <span class="text-gray-500">Pagado</span>
+            <p class="text-lg font-semibold">{{ mexico_pay.total_paid | money }}</p>
+          </div>
+          <div>
+            <span class="text-gray-500">Saldo pendiente</span>
+            <p class="text-lg font-bold {% if mexico_pay.is_complete %}text-emerald-400{% else %}text-amber-300{% endif %}">
+              {{ mexico_pay.balance | money }}
+            </p>
+          </div>
+        </div>
+        {% if mexico_pay.is_complete %}
+        <p class="text-sm text-emerald-300 mt-3">
+          Ya se alcanzaron los {{ mexico_pay.target | money }}. Puedes registrar el pago.
+        </p>
+        {% else %}
+        <p class="text-sm text-gray-500 mt-3">
+          Faltan {{ (mexico_pay.target - mexico_pay.balance) | money }} para completar la meta del periodo.
+        </p>
+        {% endif %}
+      </div>
+      {% if mexico_pay.is_complete %}
+      <form method="post" action="{{ url.PAGO_MEXICO }}" class="shrink-0">
+        <button type="submit" class="btn-primary whitespace-nowrap">
+          Registrar pago {{ mexico_pay.target | money }}
+        </button>
+      </form>
+      {% endif %}
+    </div>
+    {% if mexico_pay.contributions %}
+    <div class="mt-6 pt-6 border-t border-white/10">
+      <p class="text-sm text-gray-400 mb-3">Aportes por persona (cuota semanal)</p>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {% for p in mexico_pay.contributions %}
+        <div class="mexico-pay-person">
+          <div class="flex justify-between gap-2">
+            <span class="font-medium truncate">{{ p.name }}</span>
+            <span class="text-betpro-400 font-semibold">{{ p.amount | money }}</span>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">
+            {% if p.role == 'admin' %}Admin{% else %}Cliente{% endif %}
+            · {{ p.weeks_worked }} sem.
+            {% if p.weeks_worked == 0 %}— sin semanas trabajadas{% endif %}
+          </p>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </section>
+
   <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
     <div class="dash-kpi">
       <span class="dash-kpi-label">Retiros</span>
@@ -72,8 +144,9 @@
       <span class="dash-kpi-value">{{ analytics.totals.cargues | money }}</span>
     </div>
     <div class="dash-kpi">
-      <span class="dash-kpi-label">Tarifas retiro</span>
-      <span class="dash-kpi-value">{{ analytics.totals.fees | money }}</span>
+      <span class="dash-kpi-label">Cuotas semanales</span>
+      <span class="dash-kpi-value text-orange-300">{{ analytics.totals.weekly_deductions | money }}</span>
+      <span class="dash-kpi-sub">$500 × semana trabajada</span>
     </div>
     <div class="dash-kpi">
       <span class="dash-kpi-label">Descuentos</span>
@@ -157,13 +230,15 @@
 
   <section>
     <h3 class="text-xl font-bold mb-2">Progreso por cliente</h3>
-    <p class="text-gray-400 mb-6">Acumulado confirmado y actividad de cada cliente</p>
+    <p class="text-gray-400 mb-6">Acumulado neto confirmado (incluye cuota semanal de $500)</p>
     <div class="card overflow-x-auto">
       <table class="w-full text-sm">
         <thead>
           <tr class="text-left text-gray-400 border-b border-white/10">
             <th class="pb-3 pr-4">Cliente</th>
-            <th class="pb-3 pr-4">Acumulado</th>
+            <th class="pb-3 pr-4">Acumulado neto</th>
+            <th class="pb-3 pr-4">Semanas</th>
+            <th class="pb-3 pr-4">Cuota sem.</th>
             <th class="pb-3 pr-4">Progreso</th>
             <th class="pb-3 pr-4">Retiros</th>
             <th class="pb-3 pr-4">Cargues</th>
@@ -177,6 +252,8 @@
           <tr class="border-b border-white/5">
             <td class="py-4 pr-4 font-medium">{{ c.name }}</td>
             <td class="py-4 pr-4 font-bold text-betpro-400 text-lg">{{ c.cumulative | money }}</td>
+            <td class="py-4 pr-4">{{ c.weeks_worked }}</td>
+            <td class="py-4 pr-4 text-orange-300">− {{ c.weekly_deduction | money }}</td>
             <td class="py-4 pr-4 min-w-[140px]">
               <div class="progress-track">
                 <div class="progress-fill" style="width: {{ c.progress_pct }}%"></div>
@@ -196,7 +273,7 @@
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="8" class="py-8 text-center text-gray-500">Sin datos de clientes</td></tr>
+          <tr><td colspan="10" class="py-8 text-center text-gray-500">Sin datos de clientes</td></tr>
           {% endfor %}
         </tbody>
       </table>
