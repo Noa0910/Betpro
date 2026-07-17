@@ -79,7 +79,8 @@
         <p class="text-sm text-gray-400 mb-4">
           Meta semanal: {{ mexico_pay.target | money }} ·
           17–18/jul: $86/día (clientes) · $578/día (Johan/Nicolás) ·
-          Desde lun 20/jul: {{ mexico_pay.weekly_per_person | money }}/semana por persona
+          Desde lun 20/jul: {{ mexico_pay.weekly_per_work_day | money }}/día laboral
+          ({{ mexico_pay.weekly_per_person | money }} entre {{ mexico_pay.weekly_work_days_total }} días)
         </p>
         <div class="mexico-pay-progress mb-3">
           <div class="mexico-pay-progress-fill" style="width: {{ mexico_pay.progress_pct }}%"></div>
@@ -131,8 +132,8 @@
           <p class="text-xs text-gray-500 mt-1">
             {% if p.role == 'admin' %}Admin{% else %}Cliente{% endif %}
             {% if p.transition_days > 0 %} · {{ p.transition_days }} día(s) transición{% endif %}
-            {% if p.weeks_worked > 0 %} · {{ p.weeks_worked }} sem.{% endif %}
-            {% if p.transition_days == 0 and p.weeks_worked == 0 %}— sin aporte aún{% endif %}
+            {% if p.weekly_work_days > 0 %} · {{ p.weekly_work_days }} día(s) lab.{% endif %}
+            {% if p.transition_days == 0 and p.weekly_work_days == 0 %}— sin aporte aún{% endif %}
           </p>
         </div>
         {% endfor %}
@@ -154,7 +155,7 @@
     <div class="dash-kpi">
       <span class="dash-kpi-label">Cuotas semanales</span>
       <span class="dash-kpi-value text-orange-300">{{ analytics.totals.weekly_deductions | money }}</span>
-      <span class="dash-kpi-sub">17–18/jul por día · $500/sem desde 20/jul</span>
+      <span class="dash-kpi-sub">17–18/jul por día · $500÷6 días lab. desde 20/jul</span>
     </div>
     <div class="dash-kpi">
       <span class="dash-kpi-label">Descuentos</span>
@@ -238,14 +239,14 @@
 
   <section>
     <h3 class="text-xl font-bold mb-2">Progreso por cliente</h3>
-    <p class="text-gray-400 mb-6">Acumulado neto confirmado (incluye cuota semanal de $500)</p>
+    <p class="text-gray-400 mb-6">Acumulado neto confirmado (cuota: $500 entre 6 días lab. desde 20/jul)</p>
     <div class="card overflow-x-auto">
       <table class="w-full text-sm">
         <thead>
           <tr class="text-left text-gray-400 border-b border-white/10">
             <th class="pb-3 pr-4">Cliente</th>
             <th class="pb-3 pr-4">Acumulado neto</th>
-            <th class="pb-3 pr-4">Semanas</th>
+            <th class="pb-3 pr-4">Días lab.</th>
             <th class="pb-3 pr-4">Cuota sem.</th>
             <th class="pb-3 pr-4">Progreso</th>
             <th class="pb-3 pr-4">Retiros</th>
@@ -260,7 +261,7 @@
           <tr class="border-b border-white/5">
             <td class="py-4 pr-4 font-medium">{{ c.name }}</td>
             <td class="py-4 pr-4 font-bold text-betpro-400 text-lg">{{ c.cumulative | money }}</td>
-            <td class="py-4 pr-4">{{ c.weeks_worked }}</td>
+            <td class="py-4 pr-4">{{ c.weekly_work_days }}{% if c.transition_days > 0 %} + {{ c.transition_days }} trans.{% endif %}</td>
             <td class="py-4 pr-4 text-orange-300">− {{ c.weekly_deduction | money }}</td>
             <td class="py-4 pr-4 min-w-[140px]">
               <div class="progress-track">

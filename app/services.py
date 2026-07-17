@@ -677,6 +677,7 @@ def list_workers() -> list[dict]:
             worker["weekly_deduction"] = deductions_map.get(wid, 0.0)
             details = deduction_details.get(wid, {})
             worker["weeks_worked"] = details.get("weeks_worked", 0)
+            worker["weekly_work_days"] = details.get("weekly_work_days", 0)
             worker["transition_days"] = details.get("transition_days", 0)
             worker["pending_reports"] = count_pending_reports(wid)
             workers.append(worker)
@@ -950,6 +951,7 @@ def get_admin_analytics(period: str = "all") -> dict:
         details = deduction_details.get(uid, {})
         c["weekly_deduction"] = weekly
         c["weeks_worked"] = details.get("weeks_worked", 0)
+        c["weekly_work_days"] = details.get("weekly_work_days", 0)
         c["transition_days"] = details.get("transition_days", 0)
         c["cumulative"] = round(c["cumulative"] - weekly, 2)
         c["retiros"] = round(c["retiros"], 2)

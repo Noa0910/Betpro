@@ -241,7 +241,7 @@ def cumulative_subtitle() -> str:
         base = f"Periodo actual — desde {pe[8:10]}/{pe[5:7]}/{pe[:4]}"
     else:
         base = "Suma de días confirmados del periodo actual"
-    return f"{base} · 17–18/jul: $86/día clientes, $578/día Johan/Nicolás · Desde lun 20/jul: $500/semana"
+    return f"{base} · 17–18/jul: $86/día clientes, $578/día Johan/Nicolás · Desde 20/jul: $500÷6 días lab. (~$83.33/día)"
 
 
 def billing_context(user_id: int) -> dict:

@@ -35,7 +35,7 @@
   <p class="text-sm text-gray-400 mb-6 -mt-4">
     Bruto periodo: {{ billing.gross_cumulative | money }}
     · Descuento cuota: − {{ billing.weekly_deduction_total | money }}
-    {% if billing.transition_days > 0 %}({{ billing.transition_days }} día(s) transición{% if billing.weeks_worked > 0 %}, {{ billing.weeks_worked }} sem.{% endif %}){% elif billing.weeks_worked > 0 %}({{ billing.weeks_worked }} sem.){% endif %}
+    {% if billing.transition_days > 0 %}({{ billing.transition_days }} día(s) transición{% if billing.weekly_work_days > 0 %}, {{ billing.weekly_work_days }} día(s) lab.{% endif %}){% elif billing.weekly_work_days > 0 %}({{ billing.weekly_work_days }} día(s) lab.){% endif %}
     · <strong class="text-gray-300">Neto acumulado:</strong>
     <strong class="text-betpro-400">{{ billing.net_cumulative | money }}</strong>
   </p>

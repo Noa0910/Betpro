@@ -8,6 +8,7 @@ from app.cortes import get_corte_cutoff_date
 from app.database import db_session
 
 WEEKLY_DEDUCTION = 500.0
+WEEKLY_WORK_DAYS = 6
 MEXICO_EMPLOYEE_TARGET = 3000.0
 
 # Transición 17–18 jul 2026 (antes del inicio de cuota semanal el lunes 20).
@@ -16,6 +17,15 @@ CLIENT_DAILY_DEDUCTION = 86.0
 ADMIN_DAILY_DEDUCTION = 578.0
 ADMIN_DAILY_USERNAMES = frozenset({"patachan", "nosorio"})
 WEEKLY_DEDUCTION_START = date(2026, 7, 20)
+
+
+def weekly_per_work_day() -> float:
+    return round(WEEKLY_DEDUCTION / WEEKLY_WORK_DAYS, 2)
+
+
+def _is_billable_work_day(d: date) -> bool:
+    """Lun–sáb (6 días); domingo no cuenta."""
+    return d.weekday() < 6
 
 
 def week_start(d: date) -> date:
@@ -97,6 +107,7 @@ def get_user_confirmed_dates(user_id: int) -> list[str]:
 def calculate_user_deduction(username: str, role: str, confirmed_dates: list[str]) -> dict:
     transition_days = 0
     transition_amount = 0.0
+    weekly_work_days = 0
     weekly_weeks: set[str] = set()
 
     for report_date_str in confirmed_dates:
@@ -104,12 +115,11 @@ def calculate_user_deduction(username: str, role: str, confirmed_dates: list[str
         if d in TRANSITION_DATES:
             transition_days += 1
             transition_amount += _daily_deduction(username, role)
-        elif d >= WEEKLY_DEDUCTION_START:
-            ws = week_start(d)
-            if ws >= WEEKLY_DEDUCTION_START:
-                weekly_weeks.add(ws.isoformat())
+        elif d >= WEEKLY_DEDUCTION_START and _is_billable_work_day(d):
+            weekly_work_days += 1
+            weekly_weeks.add(week_start(d).isoformat())
 
-    weekly_amount = round(len(weekly_weeks) * WEEKLY_DEDUCTION, 2)
+    weekly_amount = round(weekly_work_days * WEEKLY_DEDUCTION / WEEKLY_WORK_DAYS, 2)
     transition_amount = round(transition_amount, 2)
     total = round(transition_amount + weekly_amount, 2)
 
@@ -117,6 +127,7 @@ def calculate_user_deduction(username: str, role: str, confirmed_dates: list[str
         "deduction": total,
         "transition_days": transition_days,
         "transition_amount": transition_amount,
+        "weekly_work_days": weekly_work_days,
         "weeks_worked": len(weekly_weeks),
         "weekly_amount": weekly_amount,
         "week_labels": [week_label(w) for w in sorted(weekly_weeks)],
@@ -197,9 +208,11 @@ def get_user_billing_summary(user_id: int, gross: float) -> dict:
     deduction = details["deduction"]
     return {
         "weeks_worked": details["weeks_worked"],
+        "weekly_work_days": details["weekly_work_days"],
         "transition_days": details["transition_days"],
         "transition_amount": details["transition_amount"],
         "weekly_amount": details["weekly_amount"],
+        "weekly_per_work_day": weekly_per_work_day(),
         "weekly_deduction_total": deduction,
         "gross_cumulative": round(gross, 2),
         "net_cumulative": round(gross - deduction, 2),
@@ -251,6 +264,7 @@ def get_mexico_pay_status() -> dict:
                     "username": row["username"],
                     "role": row["role"],
                     "weeks_worked": details.get("weeks_worked", 0),
+                    "weekly_work_days": details.get("weekly_work_days", 0),
                     "transition_days": details.get("transition_days", 0),
                     "amount": amount,
                     "week_labels": details.get("week_labels", []),
@@ -268,6 +282,8 @@ def get_mexico_pay_status() -> dict:
     return {
         "target": target,
         "weekly_per_person": WEEKLY_DEDUCTION,
+        "weekly_per_work_day": weekly_per_work_day(),
+        "weekly_work_days_total": WEEKLY_WORK_DAYS,
         "total_accrued": total_accrued,
         "total_paid": total_paid,
         "balance": balance,

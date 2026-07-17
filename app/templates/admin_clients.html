@@ -22,7 +22,7 @@
 
   <section class="mb-10">
     <h2 class="text-2xl font-bold mb-2">Clientes y administradores</h2>
-    <p class="text-gray-400 mb-6">Todos hacen reportes diarios. Cuota: $86/día (17–18 jul), $500/semana desde lun 20 jul.</p>
+    <p class="text-gray-400 mb-6">Todos hacen reportes diarios. Cuota: $86/día (17–18 jul), $500÷6 días lab. (~$83.33/d) desde lun 20 jul.</p>
 
     <div class="card overflow-x-auto mb-8">
       <table class="w-full text-sm">
@@ -31,7 +31,7 @@
             <th class="pb-3 pr-4">Tipo</th>
             <th class="pb-3 pr-4">Nombre</th>
             <th class="pb-3 pr-4">Usuario</th>
-            <th class="pb-3 pr-4">Semanas</th>
+            <th class="pb-3 pr-4">Días lab.</th>
             <th class="pb-3 pr-4">Cuota sem.</th>
             <th class="pb-3 pr-4">Acumulado neto</th>
             <th class="pb-3 pr-4">Pendientes</th>
@@ -51,7 +51,7 @@
             </td>
             <td class="py-4 pr-4 font-medium">{{ w.name }}</td>
             <td class="py-4 pr-4 text-gray-400">{{ w.username }}</td>
-            <td class="py-4 pr-4">{{ w.weeks_worked }}</td>
+            <td class="py-4 pr-4">{{ w.weekly_work_days }}{% if w.transition_days > 0 %} + {{ w.transition_days }} trans.{% endif %}</td>
             <td class="py-4 pr-4 text-orange-300">− {{ w.weekly_deduction | money }}</td>
             <td class="py-4 pr-4 font-semibold text-betpro-400 text-lg">{{ w.cumulative_total | money }}</td>
             <td class="py-4 pr-4">
