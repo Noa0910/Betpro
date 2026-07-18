@@ -8,10 +8,11 @@ from app.settings import get_system_currency
 from app.weekly_billing import (
     WEEKLY_DEDUCTION,
     apply_weekly_deductions,
-    calculate_user_deduction,
-    get_deductions_for_user_dates_batch,
+    daily_deduction_for_date,
+    get_deductions_for_period,
     get_user_deduction_details_batch,
     get_weekly_deductions_batch,
+    iter_billable_days,
 )
 
 REPORT_DRAFT = "draft"
@@ -900,11 +901,7 @@ def get_admin_analytics(period: str = "all") -> dict:
     confirmed_period = [r for r in period_reports if r["status"] == REPORT_CONFIRMED]
     submitted_period = [r for r in period_reports if r["status"] == REPORT_SUBMITTED]
 
-    period_user_dates: dict[int, list[str]] = {}
-    for r in confirmed_period:
-        uid = r["user_id"]
-        period_user_dates.setdefault(uid, []).append(r["report_date"])
-    period_quota = get_deductions_for_user_dates_batch(period_user_dates)
+    period_quota = get_deductions_for_period(start, end)
     gross_income = round(sum(r["daily_total"] for r in confirmed_period), 2)
     retiro_fees = round(sum(r["total_fees"] for r in confirmed_period), 2)
 
@@ -955,8 +952,15 @@ def get_admin_analytics(period: str = "all") -> dict:
 
     progress = sorted(clients.values(), key=lambda x: x["cumulative"], reverse=True)
     user_ids = [c["user_id"] for c in progress]
-    deductions_map = get_weekly_deductions_batch(user_ids)
-    deduction_details = get_user_deduction_details_batch(user_ids)
+    if period == "all":
+        deduction_details = get_user_deduction_details_batch(user_ids)
+    else:
+        p_start = date.fromisoformat(start) if start else None
+        p_end = date.fromisoformat(end) if end else None
+        deduction_details = get_user_deduction_details_batch(user_ids, p_start, p_end)
+    deductions_map = {
+        uid: details.get("deduction", 0.0) for uid, details in deduction_details.items()
+    }
     total_quota_all = round(sum(deductions_map.values()), 2)
     totals["weekly_deductions"] = total_quota_all if period == "all" else totals["quota_deductions"]
 
@@ -1005,18 +1009,24 @@ def get_admin_analytics(period: str = "all") -> dict:
         ).fetchall():
             user_meta[_as_int(row["id"])] = dict(row)
 
+    for d in iter_billable_days(trend_start, today):
+        iso = d.isoformat()
+        if iso not in trend_map:
+            continue
+        for meta in user_meta.values():
+            day_quota = daily_deduction_for_date(
+                meta.get("username", ""),
+                meta.get("role", "worker"),
+                d,
+            )
+            if day_quota > 0:
+                trend_map[iso]["net"] -= day_quota
+
     for r in enriched:
         if r["status"] != REPORT_CONFIRMED:
             continue
         if r["report_date"] in trend_map:
-            uid = r["user_id"]
-            meta = user_meta.get(uid, {})
-            day_quota = calculate_user_deduction(
-                meta.get("username", ""),
-                meta.get("role", "worker"),
-                [r["report_date"]],
-            )["deduction"]
-            trend_map[r["report_date"]]["net"] += r["daily_total"] - day_quota
+            trend_map[r["report_date"]]["net"] += r["daily_total"]
             trend_map[r["report_date"]]["retiros"] += r["total_retiros"]
             trend_map[r["report_date"]]["cargues"] += r["total_cargues"]
 

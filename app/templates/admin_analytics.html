@@ -76,8 +76,8 @@
         <p class="text-sm text-gray-400 mb-4">
           Meta semanal: {{ mexico_pay.target | money }} ·
           17–18/jul: $86/día (clientes) · $578/día (Johan/Nicolás) ·
-          Desde lun 20/jul: {{ mexico_pay.weekly_per_work_day | money }}/día laboral
-          ({{ mexico_pay.weekly_per_person | money }} entre {{ mexico_pay.weekly_work_days_total }} días)
+          Desde lun 20/jul: {{ mexico_pay.weekly_per_work_day | money }}/día laboral para todos
+          (se descuenta del acumulado aunque no haya reporte)
         </p>
         <div class="mexico-pay-progress mb-3">
           <div class="mexico-pay-progress-fill" style="width: {{ mexico_pay.progress_pct }}%"></div>
@@ -209,7 +209,7 @@
   <div class="grid lg:grid-cols-2 gap-8 mb-10">
     <section class="card">
       <h3 class="card-title mb-1">Ingreso neto — periodo actual</h3>
-      <p class="text-sm text-gray-400 mb-6">Confirmado menos cuotas (86/578 transición o $500÷6 días lab.)</p>
+      <p class="text-sm text-gray-400 mb-6">Ingresos confirmados menos cuotas diarias (lun–sáb, aunque no haya reporte)</p>
       <div class="trend-chart">
         {% for day in analytics.daily_trend %}
         <div class="trend-col" title="{{ day.date }}: {{ day.net | money }}">
@@ -241,7 +241,7 @@
 
   <section>
     <h3 class="text-xl font-bold mb-2">Progreso por cliente</h3>
-    <p class="text-gray-400 mb-6">Acumulado neto confirmado (cuota: $500 entre 6 días lab. desde 20/jul)</p>
+    <p class="text-gray-400 mb-6">Acumulado neto — cuota diaria descontada del bruto (17–18/jul transición; ~$83/día desde 20/jul)</p>
     <div class="card overflow-x-auto">
       <table class="w-full text-sm">
         <thead>

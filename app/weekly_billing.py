@@ -42,11 +42,50 @@ def week_label(week_start_iso_str: str) -> str:
     return f"{start.strftime('%d/%m')} — {end.strftime('%d/%m/%Y')}"
 
 
-def _report_since_filter(alias: str = "dr") -> tuple[str, list]:
+def _billing_period_start() -> date:
     cutoff = get_corte_cutoff_date()
-    if cutoff:
-        return f" AND {alias}.report_date > ?", [cutoff]
-    return "", []
+    corte_day_after = (
+        date.fromisoformat(cutoff) + timedelta(days=1) if cutoff else date(1970, 1, 1)
+    )
+    return max(corte_day_after, min(TRANSITION_DATES))
+
+
+def _resolve_period_bounds(
+    start_iso: str | None, end_iso: str | None
+) -> tuple[date, date]:
+    billing_start = _billing_period_start()
+    period_end = date.fromisoformat(end_iso) if end_iso else date.today()
+    if start_iso:
+        period_start = max(billing_start, date.fromisoformat(start_iso))
+    else:
+        period_start = billing_start
+    return period_start, period_end
+
+
+def iter_billable_days(start: date, end: date) -> list[date]:
+    """Días calendario con cuota (17–18/jul transición; lun–sáb desde 20/jul)."""
+    if end < start:
+        return []
+    days: list[date] = []
+    d = start
+    while d <= end:
+        if d in TRANSITION_DATES or (
+            d >= WEEKLY_DEDUCTION_START and _is_billable_work_day(d)
+        ):
+            days.append(d)
+        d += timedelta(days=1)
+    return days
+
+
+def daily_deduction_for_date(username: str, role: str, d: date) -> float:
+    """Cuota diaria según fecha; desde 20/jul todos pagan lo mismo (~$83)."""
+    if d in TRANSITION_DATES:
+        if username.lower() in ADMIN_DAILY_USERNAMES:
+            return ADMIN_DAILY_DEDUCTION
+        return CLIENT_DAILY_DEDUCTION
+    if d >= WEEKLY_DEDUCTION_START and _is_billable_work_day(d):
+        return weekly_per_work_day()
+    return 0.0
 
 
 def get_active_billable_user_ids() -> list[int]:
@@ -71,51 +110,43 @@ def _as_float(value) -> float:
     return float(value)
 
 
-def _daily_deduction(username: str, role: str) -> float:
-    if role == "admin" and username.lower() in ADMIN_DAILY_USERNAMES:
-        return ADMIN_DAILY_DEDUCTION
-    return CLIENT_DAILY_DEDUCTION
+def _empty_deduction_details() -> dict:
+    return {
+        "deduction": 0.0,
+        "transition_days": 0,
+        "transition_amount": 0.0,
+        "weekly_work_days": 0,
+        "weeks_worked": 0,
+        "weekly_amount": 0.0,
+        "week_labels": [],
+    }
 
 
-def get_user_confirmed_dates_batch(user_ids: list[int]) -> dict[int, list[str]]:
-    if not user_ids:
-        return {}
-    since_sql, since_params = _report_since_filter("dr")
-    placeholders = ",".join("?" * len(user_ids))
-    dates_map: dict[int, list[str]] = {uid: [] for uid in user_ids}
-    with db_session() as conn:
-        rows = conn.execute(
-            f"""
-            SELECT dr.user_id, dr.report_date
-            FROM daily_reports dr
-            WHERE dr.user_id IN ({placeholders}) AND dr.status = 'confirmed'
-            {since_sql}
-            ORDER BY dr.user_id, dr.report_date
-            """,
-            tuple(user_ids) + tuple(since_params),
-        ).fetchall()
-    for row in rows:
-        uid = _as_int(row["user_id"])
-        dates_map[uid].append(row["report_date"])
-    return dates_map
+def calculate_user_deduction(
+    username: str,
+    role: str,
+    start: date | None = None,
+    end: date | None = None,
+) -> dict:
+    """Cuota por días calendario laborables, haya o no reporte confirmado."""
+    period_start = max(start or _billing_period_start(), _billing_period_start())
+    period_end = end or date.today()
+    if period_end < period_start:
+        return _empty_deduction_details()
 
-
-def get_user_confirmed_dates(user_id: int) -> list[str]:
-    return get_user_confirmed_dates_batch([user_id]).get(user_id, [])
-
-
-def calculate_user_deduction(username: str, role: str, confirmed_dates: list[str]) -> dict:
     transition_days = 0
     transition_amount = 0.0
     weekly_work_days = 0
     weekly_weeks: set[str] = set()
 
-    for report_date_str in confirmed_dates:
-        d = date.fromisoformat(report_date_str)
+    for d in iter_billable_days(period_start, period_end):
+        amt = daily_deduction_for_date(username, role, d)
+        if amt <= 0:
+            continue
         if d in TRANSITION_DATES:
             transition_days += 1
-            transition_amount += _daily_deduction(username, role)
-        elif d >= WEEKLY_DEDUCTION_START and _is_billable_work_day(d):
+            transition_amount += amt
+        else:
             weekly_work_days += 1
             weekly_weeks.add(week_start(d).isoformat())
 
@@ -134,10 +165,13 @@ def calculate_user_deduction(username: str, role: str, confirmed_dates: list[str
     }
 
 
-def get_user_deduction_details_batch(user_ids: list[int]) -> dict[int, dict]:
+def get_user_deduction_details_batch(
+    user_ids: list[int],
+    start: date | None = None,
+    end: date | None = None,
+) -> dict[int, dict]:
     if not user_ids:
         return {}
-    dates_map = get_user_confirmed_dates_batch(user_ids)
     result: dict[int, dict] = {}
     with db_session() as conn:
         for uid in user_ids:
@@ -146,50 +180,41 @@ def get_user_deduction_details_batch(user_ids: list[int]) -> dict[int, dict]:
                 (uid,),
             ).fetchone()
             if not row:
-                result[uid] = calculate_user_deduction("", "worker", dates_map.get(uid, []))
+                result[uid] = _empty_deduction_details()
                 continue
             result[uid] = calculate_user_deduction(
                 row["username"],
                 row["role"],
-                dates_map.get(uid, []),
+                start,
+                end,
             )
     return result
 
 
 def get_user_work_weeks(user_id: int) -> list[str]:
-    confirmed = get_user_confirmed_dates(user_id)
-    weeks = {
-        week_start(date.fromisoformat(d)).isoformat()
-        for d in confirmed
-        if date.fromisoformat(d) >= WEEKLY_DEDUCTION_START
-        and week_start(date.fromisoformat(d)) >= WEEKLY_DEDUCTION_START
-    }
-    return sorted(weeks)
+    with db_session() as conn:
+        row = conn.execute(
+            "SELECT username, role FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+    if not row:
+        return []
+    details = calculate_user_deduction(row["username"], row["role"])
+    return details["week_labels"]
 
 
 def get_user_weeks_batch(user_ids: list[int]) -> dict[int, list[str]]:
-    dates_map = get_user_confirmed_dates_batch(user_ids)
-    result: dict[int, list[str]] = {uid: [] for uid in user_ids}
-    for uid in user_ids:
-        weeks = {
-            week_start(date.fromisoformat(d)).isoformat()
-            for d in dates_map.get(uid, [])
-            if date.fromisoformat(d) >= WEEKLY_DEDUCTION_START
-            and week_start(date.fromisoformat(d)) >= WEEKLY_DEDUCTION_START
-        }
-        result[uid] = sorted(weeks)
-    return result
+    details = get_user_deduction_details_batch(user_ids)
+    return {uid: details.get(uid, {}).get("week_labels", []) for uid in user_ids}
 
 
-def get_deductions_for_user_dates_batch(user_dates: dict[int, list[str]]) -> float:
-    """Suma cuotas aplicables a fechas concretas de reporte confirmado."""
-    if not user_dates:
-        return 0.0
+def get_deductions_for_period(start: str | None, end: str | None) -> float:
+    """Suma cuotas de todos los usuarios activos en un rango de fechas."""
+    period_start, period_end = _resolve_period_bounds(start, end)
+    user_ids = get_active_billable_user_ids()
     total = 0.0
     with db_session() as conn:
-        for uid, dates in user_dates.items():
-            if not dates:
-                continue
+        for uid in user_ids:
             row = conn.execute(
                 "SELECT username, role FROM users WHERE id = ?",
                 (uid,),
@@ -197,9 +222,18 @@ def get_deductions_for_user_dates_batch(user_dates: dict[int, list[str]]) -> flo
             if not row:
                 continue
             total += calculate_user_deduction(
-                row["username"], row["role"], dates
+                row["username"],
+                row["role"],
+                period_start,
+                period_end,
             )["deduction"]
     return round(total, 2)
+
+
+def get_deductions_for_user_dates_batch(user_dates: dict[int, list[str]]) -> float:
+    """Compatibilidad: ignora fechas de reporte; usa cuota calendario del periodo."""
+    del user_dates
+    return get_deductions_for_period(None, date.today().isoformat())
 
 
 def get_weekly_deductions_batch(user_ids: list[int]) -> dict[int, float]:
@@ -225,7 +259,7 @@ def get_user_billing_summary(user_id: int, gross: float) -> dict:
         ).fetchone()
     username = row["username"] if row else ""
     role = row["role"] if row else "worker"
-    details = calculate_user_deduction(username, role, get_user_confirmed_dates(user_id))
+    details = calculate_user_deduction(username, role)
     deduction = details["deduction"]
     return {
         "weeks_worked": details["weeks_worked"],
