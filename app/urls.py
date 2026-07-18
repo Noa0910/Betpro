@@ -1,6 +1,7 @@
 """Rutas públicas de BetPro (reportes y clientes)."""
 
 ACCESO = "/acceso"
+NUEVA_CONTRASENA = "/nueva-contrasena"
 SALIR = "/salir"
 MIS_REPORTES = "/mis-reportes"
 REPORTES = "/reportes"
@@ -25,6 +26,10 @@ def cliente_tarifa(worker_id: int) -> str:
 
 def cliente_estado(worker_id: int) -> str:
     return f"{CLIENTES}/{worker_id}/estado"
+
+
+def cliente_restablecer_contrasena(worker_id: int) -> str:
+    return f"{CLIENTES}/{worker_id}/restablecer-contrasena"
 
 
 def cliente_descuentos(worker_id: int) -> str:
@@ -57,6 +62,10 @@ def cliente_cambiar_fecha(worker_id: int) -> str:
 
 def admin_estado(admin_id: int) -> str:
     return f"{ADMINISTRADORES}/{admin_id}/estado"
+
+
+def admin_restablecer_contrasena(admin_id: int) -> str:
+    return f"{ADMINISTRADORES}/{admin_id}/restablecer-contrasena"
 
 
 def corte_aceptar(corte_id: int) -> str:

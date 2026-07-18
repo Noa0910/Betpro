@@ -51,12 +51,18 @@
               <span class="px-2 py-1 rounded-full text-xs bg-red-500/20 text-red-300">Inactivo</span>
               {% endif %}
             </td>
-            <td class="py-4">
+            <td class="py-4 flex flex-wrap gap-2">
               {% if a.id != user.id %}
               <form method="post" action="{{ url.admin_estado(a.id) }}">
                 <input type="hidden" name="active" value="{{ 0 if a.active else 1 }}">
                 <button type="submit" class="text-sm text-gray-400 hover:text-white">
                   {{ 'Desactivar' if a.active else 'Activar' }}
+                </button>
+              </form>
+              <form method="post" action="{{ url.admin_restablecer_contrasena(a.id) }}"
+                onsubmit="return confirm('¿Restablecer contraseña de {{ a.name }}? Podrá entrar con «123» y deberá elegir una nueva.')">
+                <button type="submit" class="text-sm text-amber-300 hover:text-amber-200">
+                  Restablecer contraseña
                 </button>
               </form>
               {% else %}

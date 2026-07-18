@@ -7,6 +7,8 @@ from fastapi.responses import RedirectResponse
 from app import urls as U
 from app.database import db_session
 
+TEMP_RESET_PASSWORD = "123"
+
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -22,13 +24,18 @@ def verify_password(plain: str, hashed: str) -> bool:
 def get_user_by_id(user_id: int) -> Optional[dict]:
     with db_session() as conn:
         row = conn.execute(
-            "SELECT id, username, name, role, retiro_fee, currency, active FROM users WHERE id = ?",
+            """
+            SELECT id, username, name, role, retiro_fee, currency, active,
+                   must_change_password
+            FROM users WHERE id = ?
+            """,
             (user_id,),
         ).fetchone()
         if not row:
             return None
         user = dict(row)
         from app.currencies import normalize_currency
+
         user["currency"] = normalize_currency(user.get("currency"))
         return user
 
@@ -44,6 +51,7 @@ def get_user_by_username(username: str) -> Optional[dict]:
 
 def session_user_payload(user: dict) -> dict:
     from app.settings import get_system_currency
+
     return {
         "id": int(user["id"]),
         "username": user["username"],
@@ -51,6 +59,7 @@ def session_user_payload(user: dict) -> dict:
         "role": user["role"],
         "retiro_fee": float(user.get("retiro_fee") or 0),
         "currency": get_system_currency(),
+        "must_change_password": bool(int(user.get("must_change_password") or 0)),
     }
 
 
@@ -65,6 +74,22 @@ def authenticate_user(username: str, password: str) -> Optional[dict]:
 
 def login_redirect() -> RedirectResponse:
     return RedirectResponse(U.ACCESO, status_code=303)
+
+
+def password_change_redirect() -> RedirectResponse:
+    return RedirectResponse(U.NUEVA_CONTRASENA, status_code=303)
+
+
+def _paths_exempt_from_password_change(path: str) -> bool:
+    return path in (U.NUEVA_CONTRASENA, U.SALIR) or path.startswith("/static")
+
+
+def _password_change_redirect(request: Request, user: dict) -> Optional[RedirectResponse]:
+    if not user.get("must_change_password"):
+        return None
+    if _paths_exempt_from_password_change(request.url.path):
+        return None
+    return password_change_redirect()
 
 
 def _refresh_session_user(request: Request) -> tuple[Optional[dict], Optional[RedirectResponse]]:
@@ -98,15 +123,29 @@ def _refresh_session_user(request: Request) -> tuple[Optional[dict], Optional[Re
     return user, None
 
 
-def check_user_session(request: Request) -> tuple[Optional[dict], Optional[RedirectResponse]]:
+def check_user_session(
+    request: Request,
+    *,
+    allow_password_change_page: bool = False,
+) -> tuple[Optional[dict], Optional[RedirectResponse]]:
     user, redirect = _refresh_session_user(request)
     if redirect:
         return None, redirect
+    if not allow_password_change_page:
+        pc_redirect = _password_change_redirect(request, user)
+        if pc_redirect:
+            return None, pc_redirect
     return user, None
 
 
-def check_admin_session(request: Request) -> tuple[Optional[dict], Optional[RedirectResponse]]:
-    user, redirect = _refresh_session_user(request)
+def check_admin_session(
+    request: Request,
+    *,
+    allow_password_change_page: bool = False,
+) -> tuple[Optional[dict], Optional[RedirectResponse]]:
+    user, redirect = check_user_session(
+        request, allow_password_change_page=allow_password_change_page
+    )
     if redirect:
         return None, redirect
     if user["role"] != "admin":

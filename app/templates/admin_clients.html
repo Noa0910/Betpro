@@ -70,6 +70,12 @@
             </td>
             <td class="py-4 flex flex-wrap gap-2">
               <a href="{{ url.cliente(w.id) }}" class="text-sm text-betpro-400 hover:underline">Ver reportes</a>
+              <form method="post" action="{{ url.cliente_restablecer_contrasena(w.id) }}"
+                onsubmit="return confirm('¿Restablecer contraseña de {{ w.name }}? Podrá entrar con «123» y deberá elegir una nueva.')">
+                <button type="submit" class="text-sm text-amber-300 hover:text-amber-200">
+                  Restablecer contraseña
+                </button>
+              </form>
               {% if w.role == 'worker' %}
               <form method="post" action="{{ url.cliente_estado(w.id) }}">
                 <input type="hidden" name="active" value="{{ 0 if w.active else 1 }}">

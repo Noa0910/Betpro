@@ -27,7 +27,16 @@ from app.weekly_billing import (
     register_mexico_pay,
 )
 from app import urls as U
-from app.auth import authenticate_user, check_admin_session, check_user_session, get_user_by_username, login_redirect, verify_password
+from app.auth import (
+    authenticate_user,
+    check_admin_session,
+    check_user_session,
+    get_user_by_id,
+    get_user_by_username,
+    login_redirect,
+    session_user_payload,
+    verify_password,
+)
 from app.config import CANONICAL_HOST, DB_EPHEMERAL, IS_VERCEL, USE_TURSO, get_session_secret, APP_VERSION
 from app.services import (
     RETIRO_PROCESSING_FEE,
@@ -52,7 +61,9 @@ from app.services import (
     save_client_report,
     save_discounts,
     change_report_date,
+    change_user_password,
     parse_report_date,
+    reset_user_password,
     today_iso,
     update_worker_fee,
     update_worker_status,
@@ -328,6 +339,8 @@ def redirect_login() -> RedirectResponse:
 
 
 def redirect_home(user: dict) -> RedirectResponse:
+    if user.get("must_change_password"):
+        return RedirectResponse(U.NUEVA_CONTRASENA, status_code=303)
     if user["role"] == "admin":
         return RedirectResponse(U.REPORTES, status_code=303)
     return RedirectResponse(U.MIS_REPORTES, status_code=303)
@@ -367,10 +380,17 @@ def login_error_message(username: str, password: str) -> str:
 @app.get(U.ACCESO, response_class=HTMLResponse)
 async def login_page(request: Request):
     if request.session.get("user"):
+        stored = request.session.get("user")
+        if stored.get("must_change_password"):
+            return RedirectResponse(U.NUEVA_CONTRASENA, status_code=303)
         return RedirectResponse("/", status_code=303)
     return templates.TemplateResponse(
         "login.html",
-        {"request": request, "error": None},
+        {
+            "request": request,
+            "error": None,
+            "message": request.query_params.get("msg"),
+        },
     )
 
 
@@ -388,7 +408,53 @@ async def login_submit(
             status_code=400,
         )
     request.session["user"] = user
+    if user.get("must_change_password"):
+        return RedirectResponse(U.NUEVA_CONTRASENA, status_code=303)
     return RedirectResponse("/", status_code=303)
+
+
+@app.get(U.NUEVA_CONTRASENA, response_class=HTMLResponse)
+async def change_password_page(request: Request):
+    user, auth_redirect = check_user_session(request, allow_password_change_page=True)
+    if auth_redirect:
+        return auth_redirect
+    if not user.get("must_change_password"):
+        return redirect_home(user)
+    return templates.TemplateResponse(
+        "change_password.html",
+        {"request": request, "user": user, "error": None},
+    )
+
+
+@app.post(U.NUEVA_CONTRASENA)
+async def change_password_submit(
+    request: Request,
+    password: str = Form(...),
+    password_confirm: str = Form(""),
+):
+    user, auth_redirect = check_user_session(request, allow_password_change_page=True)
+    if auth_redirect:
+        return auth_redirect
+    if not user.get("must_change_password"):
+        return redirect_home(user)
+    try:
+        change_user_password(user["id"], password, password_confirm)
+    except ValueError as exc:
+        return templates.TemplateResponse(
+            "change_password.html",
+            {"request": request, "user": user, "error": str(exc)},
+            status_code=400,
+        )
+    fresh = get_user_by_id(user["id"])
+    if fresh:
+        request.session["user"] = session_user_payload(fresh)
+    return RedirectResponse(
+        with_query(
+            U.REPORTES if user["role"] == "admin" else U.MIS_REPORTES,
+            msg="Contraseña actualizada correctamente",
+        ),
+        status_code=303,
+    )
 
 
 @app.get(U.SALIR)
@@ -710,6 +776,31 @@ async def admin_toggle_admin(request: Request, admin_id: int, active: str = Form
     )
 
 
+@app.post("/administradores/{admin_id}/restablecer-contrasena")
+async def admin_reset_admin_password(request: Request, admin_id: int):
+    actor, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
+    try:
+        target = reset_user_password(admin_id)
+        if target["role"] != "admin":
+            raise ValueError("Administrador no encontrado")
+    except ValueError as exc:
+        return RedirectResponse(
+            with_query(U.ADMINISTRADORES, error=str(exc)),
+            status_code=303,
+        )
+    msg = (
+        f"Contraseña de {target['name']} restablecida. "
+        f"Debe entrar con usuario «{target['username']}» y contraseña «123», "
+        "y luego elegir una nueva."
+    )
+    if target["id"] == actor["id"]:
+        request.session.clear()
+        return RedirectResponse(with_query(U.ACCESO, msg=msg), status_code=303)
+    return RedirectResponse(with_query(U.ADMINISTRADORES, msg=msg), status_code=303)
+
+
 @app.post("/clientes/{worker_id}/tarifa")
 async def admin_update_fee(
     request: Request,
@@ -758,13 +849,31 @@ async def admin_toggle_worker(request: Request, worker_id: int, active: str = Fo
     return RedirectResponse(with_query(U.CLIENTES, msg="Estado actualizado"), status_code=303)
 
 
+@app.post("/clientes/{worker_id}/restablecer-contrasena")
+async def admin_reset_worker_password(request: Request, worker_id: int):
+    actor, auth_redirect = check_admin_session(request)
+    if auth_redirect:
+        return auth_redirect
+    try:
+        target = reset_user_password(worker_id)
+    except ValueError as exc:
+        return RedirectResponse(with_query(U.CLIENTES, error=str(exc)), status_code=303)
+    msg = (
+        f"Contraseña de {target['name']} restablecida. "
+        f"Debe entrar con usuario «{target['username']}» y contraseña «123», "
+        "y luego elegir una nueva."
+    )
+    if target["id"] == actor["id"]:
+        request.session.clear()
+        return RedirectResponse(with_query(U.ACCESO, msg=msg), status_code=303)
+    return RedirectResponse(with_query(U.CLIENTES, msg=msg), status_code=303)
+
+
 @app.get("/clientes/{worker_id}", response_class=HTMLResponse)
 async def admin_worker_detail(request: Request, worker_id: int, fecha: str | None = None):
     user, auth_redirect = check_admin_session(request)
     if auth_redirect:
         return auth_redirect
-
-    from app.auth import get_user_by_id
 
     worker = get_user_by_id(worker_id)
     if not worker or worker["role"] not in ("worker", "admin"):

@@ -788,6 +788,51 @@ def update_worker_status(worker_id: int, active: bool) -> None:
         )
 
 
+def reset_user_password(user_id: int) -> dict:
+    from app.auth import TEMP_RESET_PASSWORD, hash_password
+
+    with db_session() as conn:
+        row = conn.execute(
+            "SELECT id, username, name, role FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("Usuario no encontrado")
+        conn.execute(
+            """
+            UPDATE users
+            SET password_hash = ?, must_change_password = 1
+            WHERE id = ?
+            """,
+            (hash_password(TEMP_RESET_PASSWORD), user_id),
+        )
+        return dict(row)
+
+
+def change_user_password(user_id: int, new_password: str, password_confirm: str) -> None:
+    from app.auth import TEMP_RESET_PASSWORD, hash_password
+
+    if new_password != password_confirm:
+        raise ValueError("Las contraseñas no coinciden")
+    if len(new_password.strip()) < 4:
+        raise ValueError("La contraseña debe tener al menos 4 caracteres")
+    if new_password == TEMP_RESET_PASSWORD:
+        raise ValueError("Elige una contraseña distinta de la temporal (123)")
+
+    with db_session() as conn:
+        row = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not row:
+            raise ValueError("Usuario no encontrado")
+        conn.execute(
+            """
+            UPDATE users
+            SET password_hash = ?, must_change_password = 0
+            WHERE id = ?
+            """,
+            (hash_password(new_password), user_id),
+        )
+
+
 def _period_range(period: str) -> tuple[str | None, str | None]:
     today = date.today()
     if period == "today":

@@ -306,12 +306,21 @@ def _migrate_client_expenses(conn) -> None:
     )
 
 
+def _migrate_must_change_password(conn) -> None:
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+    if "must_change_password" not in cols:
+        conn.execute(
+            "ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0"
+        )
+
+
 def _migrate(conn) -> None:
     _migrate_currency(conn)
     _migrate_app_settings(conn)
     _migrate_cortes(conn)
     _migrate_mexico_pay(conn)
     _migrate_client_expenses(conn)
+    _migrate_must_change_password(conn)
     if USE_TURSO:
         return
 
